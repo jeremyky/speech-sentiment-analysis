@@ -52,24 +52,89 @@ class AudioMeter(tk.Canvas):
                 fill=color, outline=''
             )
 
+class EmotionDisplay(ttk.Frame):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        # Initialize with a waiting message
+        self.setup_initial_display()
+        
+    def setup_initial_display(self):
+        frame = ttk.Frame(self)
+        frame.pack(fill='x', pady=2)
+        label = ttk.Label(
+            frame,
+            text="Waiting for speech...",
+            font=('Arial', 10)
+        )
+        label.pack(side='left', padx=5)
+        
+    def update_emotions(self, emotions):
+        # Clear previous emotions
+        for widget in self.winfo_children():
+            widget.destroy()
+        
+        if not emotions:
+            self.setup_initial_display()
+            return
+            
+        # Create new emotion displays
+        for emotion in emotions:
+            frame = ttk.Frame(self)
+            frame.pack(fill='x', pady=2)
+            
+            # Emotion label with percentage
+            label_text = f"{emotion['label'].capitalize()}: {emotion['score']:.1%}"
+            label = ttk.Label(
+                frame, 
+                text=label_text,
+                foreground=emotion['color'],
+                font=('Arial', 10, 'bold')
+            )
+            label.pack(side='left', padx=5)
+            
+            # Confidence bar
+            bar = ttk.Progressbar(frame, length=200, mode='determinate')
+            bar.pack(side='right', padx=5)
+            bar['value'] = emotion['score'] * 100
+
 class SentimentAnalysisGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Speech-to-Sentiment Analyzer")
-        self.root.geometry("600x500")
+        self.root.geometry("600x600")  # Increased height for timer
         
         # Initialize components
         self.transcriber = WhisperTranscriber()
         self.sentiment_analyzer = SentimentAnalyzer()
         self.is_recording = False
         self.audio_data = None
+        self.cycle_time = 5  # 5 seconds per cycle
+        self.current_transcription = ""
         
         self.setup_gui()
         
     def setup_gui(self):
+        # Timer display
+        self.timer_frame = ttk.Frame(self.root)
+        self.timer_frame.pack(pady=5)
+        self.timer_label = ttk.Label(
+            self.timer_frame, 
+            text="Time remaining: 5s",
+            font=('Arial', 12)
+        )
+        self.timer_label.pack(side='left', padx=5)
+        
+        # Cycle counter
+        self.cycle_label = ttk.Label(
+            self.timer_frame,
+            text="Cycle: 0",
+            font=('Arial', 12)
+        )
+        self.cycle_label.pack(side='left', padx=20)
+        
         # Status label
         self.status_label = ttk.Label(self.root, text="Ready to start", font=('Arial', 12))
-        self.status_label.pack(pady=10)
+        self.status_label.pack(pady=5)
         
         # Audio meter
         self.audio_meter = AudioMeter(self.root)
@@ -80,21 +145,22 @@ class SentimentAnalysisGUI:
         self.transcription_text = tk.Text(self.root, height=5, width=50)
         self.transcription_text.pack(pady=10, padx=20)
         
-        # Sentiment display
-        ttk.Label(self.root, text="Sentiment Analysis:", font=('Arial', 10, 'bold')).pack(pady=5)
-        self.sentiment_frame = ttk.Frame(self.root)
-        self.sentiment_frame.pack(pady=10)
-        
-        self.sentiment_label = ttk.Label(self.sentiment_frame, text="No sentiment yet", font=('Arial', 12))
-        self.sentiment_label.pack()
-        
-        # Confidence bar
-        self.confidence_bar = ttk.Progressbar(self.root, length=200, mode='determinate')
-        self.confidence_bar.pack(pady=10)
+        # Emotion display
+        ttk.Label(self.root, text="Emotion Analysis:", font=('Arial', 10, 'bold')).pack(pady=5)
+        self.emotion_display = EmotionDisplay(self.root)
+        self.emotion_display.pack(pady=10, padx=20, fill='x')
         
         # Start/Stop button
         self.toggle_button = ttk.Button(self.root, text="Start Recording", command=self.toggle_recording)
         self.toggle_button.pack(pady=20)
+        
+    def update_timer(self, remaining):
+        self.timer_label.config(text=f"Time remaining: {remaining}s")
+        if remaining > 0 and self.is_recording:
+            self.root.after(1000, self.update_timer, remaining - 1)
+            
+    def update_cycle_counter(self, cycle):
+        self.cycle_label.config(text=f"Cycle: {cycle}")
         
     def audio_callback(self, indata, frames, time, status):
         self.audio_data = indata[:, 0]
@@ -102,7 +168,7 @@ class SentimentAnalysisGUI:
     def update_audio_meter(self):
         if self.is_recording:
             self.audio_meter.update_levels(self.audio_data)
-            self.root.after(50, self.update_audio_meter)  # Update every 50ms
+            self.root.after(50, self.update_audio_meter)
         else:
             self.audio_meter.update_levels(None)
             
@@ -111,6 +177,7 @@ class SentimentAnalysisGUI:
             self.is_recording = True
             self.toggle_button.config(text="Stop Recording")
             self.status_label.config(text="Recording...")
+            self.cycle_count = 0
             
             # Start audio monitoring
             self.stream = sd.InputStream(
@@ -120,6 +187,7 @@ class SentimentAnalysisGUI:
             )
             self.stream.start()
             self.update_audio_meter()
+            self.update_timer(self.cycle_time)
             
             # Start recording in a separate thread
             self.record_thread = threading.Thread(target=self.record_and_analyze)
@@ -136,35 +204,41 @@ class SentimentAnalysisGUI:
     def record_and_analyze(self):
         while self.is_recording:
             try:
+                self.cycle_count += 1
+                self.root.after(0, self.update_cycle_counter, self.cycle_count)
+                
                 # Record and transcribe
                 transcription = self.transcriber.transcribe_realtime()
-                self.root.after(0, self.update_transcription, transcription)
+                if transcription and not transcription.isspace():
+                    self.current_transcription += f"{transcription}\n"
+                    self.root.after(0, self.update_transcription, self.current_transcription)
+                    
+                    # Analyze sentiment
+                    print(f"Sending for analysis: {transcription}")  # Debug print
+                    emotions = self.sentiment_analyzer.analyze_text(transcription)
+                    print(f"Received emotions: {emotions}")  # Debug print
+                    self.root.after(0, self.update_sentiment, emotions)
                 
-                # Analyze sentiment
-                sentiment = self.sentiment_analyzer.analyze_text(transcription)
-                self.root.after(0, self.update_sentiment, sentiment)
+                # Reset timer for next cycle
+                self.root.after(0, self.update_timer, self.cycle_time)
                 
             except Exception as e:
+                print(f"Error in record_and_analyze: {e}")  # Debug print
                 self.root.after(0, self.show_error, str(e))
                 break
     
     def update_transcription(self, text):
         self.transcription_text.delete(1.0, tk.END)
         self.transcription_text.insert(tk.END, text)
+        # Scroll to the bottom
+        self.transcription_text.see(tk.END)
     
-    def update_sentiment(self, sentiment):
-        label = sentiment['label']
-        score = sentiment['score']
-        
-        # Update sentiment label with color
-        color = '#2ecc71' if label == 'POSITIVE' else '#e74c3c'
-        self.sentiment_label.config(
-            text=f"{label}",
-            foreground=color
-        )
-        
-        # Update confidence bar
-        self.confidence_bar['value'] = score * 100
+    def update_sentiment(self, emotions):
+        try:
+            print(f"Updating display with emotions: {emotions}")  # Debug print
+            self.emotion_display.update_emotions(emotions)
+        except Exception as e:
+            print(f"Error updating sentiment display: {e}")  # Debug print
     
     def show_error(self, error_msg):
         self.status_label.config(text=f"Error: {error_msg}")
