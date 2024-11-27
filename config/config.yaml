@@ -1,0 +1,19 @@
+# Main configuration file
+model:
+  emotion_mode: "detailed"  # Can be "basic" or "detailed"
+  whisper_model_size: "base"
+  sentiment_models:
+    basic: "distilbert-base-uncased-finetuned-sst-2-english"
+    detailed: "j-hartmann/emotion-english-distilroberta-base"
+  
+audio:
+  sample_rate: 16000
+  recording_duration: 5
+  channels: 1
+
+display:
+  update_interval_ms: 50
+  max_transcription_history: 100
+  audio_meter:
+    bars: 30
+    update_interval_ms: 50 

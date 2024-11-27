@@ -3,8 +3,8 @@ from tkinter import ttk
 import threading
 import numpy as np
 import time
-from speech_recognition.whisper_client import WhisperTranscriber
-from sentiment_analysis.bert_model import SentimentAnalyzer
+from src.speech_recognition.whisper_client import WhisperTranscriber
+from src.sentiment_analysis.bert_model import SentimentAnalyzer
 import sounddevice as sd
 
 class AudioMeter(tk.Canvas):
@@ -101,7 +101,7 @@ class SentimentAnalysisGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Speech-to-Sentiment Analyzer")
-        self.root.geometry("600x600")  # Increased height for timer
+        self.root.geometry("600x700")
         
         # Initialize components
         self.transcriber = WhisperTranscriber()
@@ -114,26 +114,52 @@ class SentimentAnalysisGUI:
         self.setup_gui()
         
     def setup_gui(self):
+        # Control Panel Frame
+        control_frame = ttk.Frame(self.root)
+        control_frame.pack(pady=5, padx=20, fill='x')
+        
+        # Single Record Button
+        self.record_button = ttk.Button(
+            control_frame, 
+            text="Start Recording", 
+            command=self.toggle_recording
+        )
+        self.record_button.pack(side='left', padx=5)
+        
+        # Post-Recording Controls Frame (initially hidden)
+        self.post_record_frame = ttk.Frame(control_frame)
+        self.post_record_frame.pack(side='left', padx=5)
+        
+        # New Recording Button (initially hidden)
+        self.new_recording_button = ttk.Button(
+            self.post_record_frame,
+            text="New Recording",
+            command=self.start_new_recording
+        )
+        
+        # Continue Recording Button (initially hidden)
+        self.continue_recording_button = ttk.Button(
+            self.post_record_frame,
+            text="Continue Recording",
+            command=self.continue_recording
+        )
+        
         # Timer display
         self.timer_frame = ttk.Frame(self.root)
         self.timer_frame.pack(pady=5)
         self.timer_label = ttk.Label(
             self.timer_frame, 
-            text="Time remaining: 5s",
+            text="Time remaining: --",
             font=('Arial', 12)
         )
         self.timer_label.pack(side='left', padx=5)
         
-        # Cycle counter
-        self.cycle_label = ttk.Label(
-            self.timer_frame,
-            text="Cycle: 0",
+        # Status label
+        self.status_label = ttk.Label(
+            self.root, 
+            text="Click 'Start Recording' to begin", 
             font=('Arial', 12)
         )
-        self.cycle_label.pack(side='left', padx=20)
-        
-        # Status label
-        self.status_label = ttk.Label(self.root, text="Ready to start", font=('Arial', 12))
         self.status_label.pack(pady=5)
         
         # Audio meter
@@ -141,27 +167,82 @@ class SentimentAnalysisGUI:
         self.audio_meter.pack(pady=10, padx=20)
         
         # Transcription display
-        ttk.Label(self.root, text="Transcription:", font=('Arial', 10, 'bold')).pack(pady=5)
+        ttk.Label(
+            self.root, 
+            text="Transcription:", 
+            font=('Arial', 10, 'bold')
+        ).pack(pady=5)
         self.transcription_text = tk.Text(self.root, height=5, width=50)
         self.transcription_text.pack(pady=10, padx=20)
         
         # Emotion display
-        ttk.Label(self.root, text="Emotion Analysis:", font=('Arial', 10, 'bold')).pack(pady=5)
+        ttk.Label(
+            self.root, 
+            text="Emotion Analysis:", 
+            font=('Arial', 10, 'bold')
+        ).pack(pady=5)
         self.emotion_display = EmotionDisplay(self.root)
         self.emotion_display.pack(pady=10, padx=20, fill='x')
         
-        # Start/Stop button
-        self.toggle_button = ttk.Button(self.root, text="Start Recording", command=self.toggle_recording)
-        self.toggle_button.pack(pady=20)
-        
-    def update_timer(self, remaining):
-        self.timer_label.config(text=f"Time remaining: {remaining}s")
-        if remaining > 0 and self.is_recording:
-            self.root.after(1000, self.update_timer, remaining - 1)
+    def toggle_recording(self):
+        if not self.is_recording:
+            self.start_recording()
+        else:
+            self.stop_recording()
             
-    def update_cycle_counter(self, cycle):
-        self.cycle_label.config(text=f"Cycle: {cycle}")
+    def start_recording(self):
+        self.is_recording = True
+        self.record_button.config(text="Stop Recording")
+        self.status_label.config(text="Recording...")
         
+        # Hide post-recording controls
+        self.new_recording_button.pack_forget()
+        self.continue_recording_button.pack_forget()
+        
+        # Start audio monitoring
+        self.stream = sd.InputStream(
+            channels=1,
+            callback=self.audio_callback,
+            samplerate=16000
+        )
+        self.stream.start()
+        self.update_audio_meter()
+        self.update_timer(self.cycle_time)
+        
+        # Start recording in a separate thread
+        self.record_thread = threading.Thread(target=self.record_and_analyze)
+        self.record_thread.daemon = True
+        self.record_thread.start()
+        
+    def stop_recording(self):
+        self.is_recording = False
+        self.record_button.config(text="Start Recording")
+        self.status_label.config(text="Recording complete. Review or start new/continue recording.")
+        
+        # Show post-recording controls
+        self.new_recording_button.pack(side='left', padx=5)
+        self.continue_recording_button.pack(side='left', padx=5)
+        
+        if hasattr(self, 'stream'):
+            self.stream.stop()
+            self.stream.close()
+            
+    def start_new_recording(self):
+        self.current_transcription = ""
+        self.update_transcription("")
+        self.emotion_display.update_emotions([])
+        self.start_recording()
+        
+    def continue_recording(self):
+        self.start_recording()  # Continues with existing transcription
+            
+    def update_timer(self, remaining):
+        if remaining >= 0 and self.is_recording:
+            self.timer_label.config(text=f"Time remaining: {remaining}s")
+            self.root.after(1000, self.update_timer, remaining - 1)
+        elif remaining < 0 and self.is_recording:
+            self.stop_recording()
+            
     def audio_callback(self, indata, frames, time, status):
         self.audio_data = indata[:, 0]
         
@@ -172,78 +253,37 @@ class SentimentAnalysisGUI:
         else:
             self.audio_meter.update_levels(None)
             
-    def toggle_recording(self):
-        if not self.is_recording:
-            self.is_recording = True
-            self.toggle_button.config(text="Stop Recording")
-            self.status_label.config(text="Recording...")
-            self.cycle_count = 0
-            
-            # Start audio monitoring
-            self.stream = sd.InputStream(
-                channels=1,
-                callback=self.audio_callback,
-                samplerate=16000
-            )
-            self.stream.start()
-            self.update_audio_meter()
-            self.update_timer(self.cycle_time)
-            
-            # Start recording in a separate thread
-            self.record_thread = threading.Thread(target=self.record_and_analyze)
-            self.record_thread.daemon = True
-            self.record_thread.start()
-        else:
-            self.is_recording = False
-            self.toggle_button.config(text="Start Recording")
-            self.status_label.config(text="Stopped")
-            if hasattr(self, 'stream'):
-                self.stream.stop()
-                self.stream.close()
-            
     def record_and_analyze(self):
-        while self.is_recording:
-            try:
-                self.cycle_count += 1
-                self.root.after(0, self.update_cycle_counter, self.cycle_count)
+        try:
+            # Record and transcribe
+            transcription = self.transcriber.transcribe_realtime()
+            if transcription and not transcription.isspace():
+                self.current_transcription += f"{transcription}\n"
+                self.root.after(0, self.update_transcription, self.current_transcription)
                 
-                # Record and transcribe
-                transcription = self.transcriber.transcribe_realtime()
-                if transcription and not transcription.isspace():
-                    self.current_transcription += f"{transcription}\n"
-                    self.root.after(0, self.update_transcription, self.current_transcription)
-                    
-                    # Analyze sentiment
-                    print(f"Sending for analysis: {transcription}")  # Debug print
-                    emotions = self.sentiment_analyzer.analyze_text(transcription)
-                    print(f"Received emotions: {emotions}")  # Debug print
-                    self.root.after(0, self.update_sentiment, emotions)
+                # Analyze sentiment
+                emotions = self.sentiment_analyzer.analyze_text(transcription)
+                self.root.after(0, self.update_sentiment, emotions)
                 
-                # Reset timer for next cycle
-                self.root.after(0, self.update_timer, self.cycle_time)
-                
-            except Exception as e:
-                print(f"Error in record_and_analyze: {e}")  # Debug print
-                self.root.after(0, self.show_error, str(e))
-                break
+        except Exception as e:
+            print(f"Error in record_and_analyze: {e}")
+            self.root.after(0, self.show_error, str(e))
     
     def update_transcription(self, text):
         self.transcription_text.delete(1.0, tk.END)
         self.transcription_text.insert(tk.END, text)
-        # Scroll to the bottom
         self.transcription_text.see(tk.END)
     
     def update_sentiment(self, emotions):
         try:
-            print(f"Updating display with emotions: {emotions}")  # Debug print
             self.emotion_display.update_emotions(emotions)
         except Exception as e:
-            print(f"Error updating sentiment display: {e}")  # Debug print
+            print(f"Error updating sentiment display: {e}")
     
     def show_error(self, error_msg):
         self.status_label.config(text=f"Error: {error_msg}")
         self.is_recording = False
-        self.toggle_button.config(text="Start Recording")
+        self.record_button.config(text="Start Recording")
 
 def main():
     root = tk.Tk()

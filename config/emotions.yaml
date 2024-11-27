@@ -1,0 +1,40 @@
+# Emotion configurations
+emotion_modes:
+  basic:
+    emotions:
+      - label: "POSITIVE"
+        color: "#2ecc71"  # Green
+        threshold: 0.5
+      - label: "NEGATIVE" 
+        color: "#e74c3c"  # Red
+        threshold: 0.5
+    model_config:
+      top_k: 1
+      threshold: 0.5
+
+  detailed:
+    emotions:
+      - label: "joy"
+        color: "#2ecc71"  # Green
+        threshold: 0.3
+      - label: "surprise"
+        color: "#f1c40f"  # Yellow  
+        threshold: 0.3
+      - label: "neutral"
+        color: "#95a5a6"  # Gray
+        threshold: 0.3
+      - label: "sadness"
+        color: "#3498db"  # Blue
+        threshold: 0.3
+      - label: "anger"
+        color: "#e74c3c"  # Red
+        threshold: 0.3
+      - label: "fear"
+        color: "#9b59b6"  # Purple
+        threshold: 0.3
+      - label: "disgust"
+        color: "#1abc9c"  # Turquoise
+        threshold: 0.3
+    model_config:
+      top_k: 3
+      threshold: 0.2 

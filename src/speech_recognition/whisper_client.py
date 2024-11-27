@@ -1,36 +1,40 @@
 import whisper
 import sounddevice as sd
-import numpy as np
 from scipy.io.wavfile import write
 import tempfile
+from src.utils.config_manager import ConfigManager
 
 class WhisperTranscriber:
-    def __init__(self, model_size="base"):
+    def __init__(self):
+        self.config = ConfigManager()
+        model_size = self.config.main_config['model']['whisper_model_size']
         self.model = whisper.load_model(model_size)
-        self.sample_rate = 16000
+        
+        audio_config = self.config.get_audio_config()
+        self.sample_rate = audio_config['sample_rate']
+        self.channels = audio_config['channels']
+        self.default_duration = audio_config['recording_duration']
 
-    def record_audio(self, duration=5):
+    def record_audio(self, duration=None):
         """Record audio from microphone"""
+        duration = duration or self.default_duration
         print("Recording...")
         audio = sd.rec(
             int(duration * self.sample_rate),
             samplerate=self.sample_rate,
-            channels=1
+            channels=self.channels
         )
         sd.wait()
         return audio
 
     def transcribe_audio(self, audio):
         """Transcribe audio using Whisper"""
-        # Save audio to temporary file
         with tempfile.NamedTemporaryFile(suffix=".wav") as temp_audio:
             write(temp_audio.name, self.sample_rate, audio)
-            
-            # Transcribe using Whisper
             result = self.model.transcribe(temp_audio.name)
             return result["text"]
 
-    def transcribe_realtime(self, duration=5):
+    def transcribe_realtime(self, duration=None):
         """Record and transcribe in one step"""
         audio = self.record_audio(duration)
         return self.transcribe_audio(audio) 
