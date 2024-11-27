@@ -11,3 +11,4 @@ pydub
 pydub-ffmpeg
 pydub-ffmpeg-downloader
 pydub-ffmpeg-downloader-downloader
+tk
