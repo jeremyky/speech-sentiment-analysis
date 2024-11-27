@@ -37,4 +37,13 @@ class WhisperTranscriber:
     def transcribe_realtime(self, duration=None):
         """Record and transcribe in one step"""
         audio = self.record_audio(duration)
-        return self.transcribe_audio(audio) 
+        return self.transcribe_audio(audio)
+
+    def transcribe_file(self, filepath):
+        """Transcribe audio from file"""
+        try:
+            result = self.model.transcribe(filepath)
+            return result["text"]
+        except Exception as e:
+            print(f"Error transcribing file: {e}")
+            raise 

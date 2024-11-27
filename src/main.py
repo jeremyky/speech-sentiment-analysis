@@ -6,6 +6,20 @@ import time
 from src.speech_recognition.whisper_client import WhisperTranscriber
 from src.sentiment_analysis.bert_model import SentimentAnalyzer
 import sounddevice as sd
+from tkinter import filedialog
+import os
+import wave
+import contextlib
+import tempfile
+from pydub import AudioSegment
+
+# Try to import video functionality, but make it optional
+try:
+    from pydub.utils import mediainfo
+    VIDEO_SUPPORT = True
+except ImportError:
+    print("Video support not available. Install moviepy for video file support.")
+    VIDEO_SUPPORT = False
 
 class AudioMeter(tk.Canvas):
     def __init__(self, parent, width=400, height=60, **kwargs):
@@ -110,10 +124,39 @@ class SentimentAnalysisGUI:
         self.audio_data = None
         self.cycle_time = 5  # 5 seconds per cycle
         self.current_transcription = ""
+        self.analyze_full_text = False
         
         self.setup_gui()
         
     def setup_gui(self):
+        # Add File Upload Frame at the top
+        upload_frame = ttk.LabelFrame(self.root, text="File Upload")
+        upload_frame.pack(pady=5, padx=20, fill='x')
+        
+        # Audio File Upload Button
+        self.audio_upload_btn = ttk.Button(
+            upload_frame,
+            text="Upload Audio File",
+            command=self.upload_audio
+        )
+        self.audio_upload_btn.pack(side='left', padx=5, pady=5)
+        
+        # Video File Upload Button
+        self.video_upload_btn = ttk.Button(
+            upload_frame,
+            text="Upload Video File",
+            command=self.upload_video
+        )
+        self.video_upload_btn.pack(side='left', padx=5, pady=5)
+        
+        # File info label
+        self.file_info_label = ttk.Label(
+            upload_frame,
+            text="No file selected",
+            font=('Arial', 10)
+        )
+        self.file_info_label.pack(side='left', padx=10)
+        
         # Control Panel Frame
         control_frame = ttk.Frame(self.root)
         control_frame.pack(pady=5, padx=20, fill='x')
@@ -183,6 +226,26 @@ class SentimentAnalysisGUI:
         ).pack(pady=5)
         self.emotion_display = EmotionDisplay(self.root)
         self.emotion_display.pack(pady=10, padx=20, fill='x')
+        
+        # Add Analysis Mode Frame
+        analysis_frame = ttk.LabelFrame(self.root, text="Analysis Mode")
+        analysis_frame.pack(pady=5, padx=20, fill='x')
+        
+        # Add radio buttons for analysis mode
+        self.analysis_mode = tk.StringVar(value="segment")
+        ttk.Radiobutton(
+            analysis_frame,
+            text="Analyze Current Segment",
+            variable=self.analysis_mode,
+            value="segment"
+        ).pack(side='left', padx=5)
+        
+        ttk.Radiobutton(
+            analysis_frame,
+            text="Analyze Full Transcript",
+            variable=self.analysis_mode,
+            value="full"
+        ).pack(side='left', padx=5)
         
     def toggle_recording(self):
         if not self.is_recording:
@@ -261,8 +324,14 @@ class SentimentAnalysisGUI:
                 self.current_transcription += f"{transcription}\n"
                 self.root.after(0, self.update_transcription, self.current_transcription)
                 
-                # Analyze sentiment
-                emotions = self.sentiment_analyzer.analyze_text(transcription)
+                # Analyze sentiment based on mode
+                if self.analysis_mode.get() == "full":
+                    # Analyze full transcript
+                    emotions = self.sentiment_analyzer.analyze_text(self.current_transcription)
+                else:
+                    # Analyze only current segment
+                    emotions = self.sentiment_analyzer.analyze_text(transcription)
+                    
                 self.root.after(0, self.update_sentiment, emotions)
                 
         except Exception as e:
@@ -284,6 +353,99 @@ class SentimentAnalysisGUI:
         self.status_label.config(text=f"Error: {error_msg}")
         self.is_recording = False
         self.record_button.config(text="Start Recording")
+
+    def upload_audio(self):
+        """Handle audio file upload"""
+        filetypes = (
+            ('Audio files', '*.wav *.mp3 *.m4a *.aac *.flac'),
+            ('All files', '*.*')
+        )
+        
+        filename = filedialog.askopenfilename(
+            title='Open audio file',
+            filetypes=filetypes
+        )
+        
+        if filename:
+            self.process_audio_file(filename)
+
+    def upload_video(self):
+        """Handle video file upload"""
+        filetypes = (
+            ('Video files', '*.mp4 *.mov *.avi *.mkv'),
+            ('All files', '*.*')
+        )
+        
+        filename = filedialog.askopenfilename(
+            title='Open video file',
+            filetypes=filetypes
+        )
+        
+        if filename:
+            self.process_video_file(filename)
+
+    def process_audio_file(self, filepath):
+        """Process uploaded audio file"""
+        try:
+            # Update status
+            self.status_label.config(text=f"Processing audio file: {os.path.basename(filepath)}")
+            self.file_info_label.config(text=f"File: {os.path.basename(filepath)}")
+            
+            # Convert audio to wav format if needed
+            if not filepath.lower().endswith('.wav'):
+                audio = AudioSegment.from_file(filepath)
+                temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                audio.export(temp_wav.name, format='wav')
+                filepath = temp_wav.name
+            
+            # Get audio duration and info
+            audio_info = mediainfo(filepath)
+            duration = float(audio_info['duration'])
+            self.status_label.config(text=f"Audio duration: {duration:.2f} seconds")
+
+            # Transcribe the audio
+            result = self.transcriber.transcribe_file(filepath)
+            
+            # Update transcription
+            self.current_transcription = result
+            self.update_transcription(result)
+            
+            # Analyze sentiment
+            emotions = self.sentiment_analyzer.analyze_text(result)
+            self.update_sentiment(emotions)
+            
+            self.status_label.config(text="Audio processing complete!")
+            
+            # Clean up temp file if created
+            if 'temp_wav' in locals():
+                os.unlink(temp_wav.name)
+            
+        except Exception as e:
+            self.show_error(f"Error processing audio: {str(e)}")
+
+    def process_video_file(self, filepath):
+        """Process uploaded video file"""
+        try:
+            # Update status
+            self.status_label.config(text=f"Processing video file: {os.path.basename(filepath)}")
+            self.file_info_label.config(text=f"File: {os.path.basename(filepath)}")
+            
+            # Extract audio from video
+            video = VideoFileClip(filepath)
+            
+            # Create temporary audio file
+            temp_audio = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            video.audio.write_audiofile(temp_audio.name)
+            video.close()
+            
+            # Process the extracted audio
+            self.process_audio_file(temp_audio.name)
+            
+            # Clean up
+            os.unlink(temp_audio.name)
+            
+        except Exception as e:
+            self.show_error(f"Error processing video: {str(e)}")
 
 def main():
     root = tk.Tk()
