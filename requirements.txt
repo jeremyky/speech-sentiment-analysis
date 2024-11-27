@@ -1,0 +1,13 @@
+openai-whisper
+transformers
+torch
+numpy
+pandas
+sounddevice
+scipy
+python-dotenv 
+pyaudio
+pydub
+pydub-ffmpeg
+pydub-ffmpeg-downloader
+pydub-ffmpeg-downloader-downloader
