@@ -31,24 +31,67 @@ class SentimentAnalyzer:
             for emotion in self.emotion_config['emotions']
         }
 
+    def chunk_text(self, text, max_length=500):
+        """Split text into chunks that won't exceed model's max length"""
+        words = text.split()
+        chunks = []
+        current_chunk = []
+        current_length = 0
+        
+        for word in words:
+            if current_length + len(word) + 1 > max_length:
+                chunks.append(' '.join(current_chunk))
+                current_chunk = [word]
+                current_length = len(word)
+            else:
+                current_chunk.append(word)
+                current_length += len(word) + 1
+                
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+            
+        return chunks
+
     def analyze_text(self, text):
         """Analyze emotions in text"""
         try:
             if not text or text.isspace():
                 return [{'label': 'Waiting...', 'score': 0.0, 'color': '#95a5a6'}]
 
-            results = self.sentiment_pipeline(text)
+            # Split text into manageable chunks
+            chunks = self.chunk_text(text)
             
-            emotions = []
-            for result in results[0]:
-                emotion = {
-                    'label': result['label'],
-                    'score': result['score'],
-                    'color': self.emotion_colors.get(result['label'], '#95a5a6')
+            # Analyze each chunk
+            all_results = []
+            for chunk in chunks:
+                chunk_results = self.sentiment_pipeline(chunk)
+                all_results.extend(chunk_results)
+            
+            # Aggregate results
+            emotion_scores = {}
+            for result in all_results:
+                for emotion in result:
+                    label = emotion['label']
+                    score = emotion['score']
+                    if label in emotion_scores:
+                        emotion_scores[label] = max(emotion_scores[label], score)
+                    else:
+                        emotion_scores[label] = score
+            
+            # Convert to list and sort by score
+            emotions = [
+                {
+                    'label': label,
+                    'score': score,
+                    'color': self.emotion_colors.get(label, '#95a5a6')
                 }
-                emotions.append(emotion)
-
-            return emotions
+                for label, score in emotion_scores.items()
+            ]
+            emotions.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Return top k emotions based on config
+            top_k = self.emotion_config['model_config']['top_k']
+            return emotions[:top_k]
             
         except Exception as e:
             print(f"Error in analyze_text: {e}")

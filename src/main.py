@@ -12,6 +12,7 @@ import wave
 import contextlib
 import tempfile
 from pydub import AudioSegment
+from pydub.utils import mediainfo
 
 # Try to import video functionality, but make it optional
 try:
@@ -20,51 +21,6 @@ try:
 except ImportError:
     print("Video support not available. Install moviepy for video file support.")
     VIDEO_SUPPORT = False
-
-class AudioMeter(tk.Canvas):
-    def __init__(self, parent, width=400, height=60, **kwargs):
-        super().__init__(parent, width=width, height=height, **kwargs)
-        self.width = width
-        self.height = height
-        self.configure(bg='black')
-        self.bars = 30
-        self.bar_width = (width - (self.bars + 1)) / self.bars
-        self.levels = [0] * self.bars
-        
-    def update_levels(self, audio_data):
-        if audio_data is None:
-            self.levels = [0] * self.bars
-        else:
-            # Convert audio data to levels
-            chunk_size = len(audio_data) // self.bars
-            new_levels = []
-            for i in range(self.bars):
-                start = i * chunk_size
-                end = start + chunk_size
-                chunk = audio_data[start:end]
-                level = float(np.abs(chunk).mean())
-                new_levels.append(min(1.0, level * 3))  # Amplify for visibility
-            self.levels = new_levels
-        self.draw_bars()
-        
-    def draw_bars(self):
-        self.delete("all")
-        for i, level in enumerate(self.levels):
-            x = i * (self.bar_width + 1) + 1
-            height = int(level * self.height)
-            # Color gradient from green to yellow to red
-            if level < 0.5:
-                color = '#2ecc71'  # green
-            elif level < 0.8:
-                color = '#f1c40f'  # yellow
-            else:
-                color = '#e74c3c'  # red
-            
-            self.create_rectangle(
-                x, self.height - height,
-                x + self.bar_width, self.height,
-                fill=color, outline=''
-            )
 
 class EmotionDisplay(ttk.Frame):
     def __init__(self, parent, **kwargs):
@@ -110,6 +66,51 @@ class EmotionDisplay(ttk.Frame):
             bar = ttk.Progressbar(frame, length=200, mode='determinate')
             bar.pack(side='right', padx=5)
             bar['value'] = emotion['score'] * 100
+
+class AudioMeter(tk.Canvas):
+    def __init__(self, parent, width=400, height=60, **kwargs):
+        super().__init__(parent, width=width, height=height, **kwargs)
+        self.width = width
+        self.height = height
+        self.configure(bg='black')
+        self.bars = 30
+        self.bar_width = (width - (self.bars + 1)) / self.bars
+        self.levels = [0] * self.bars
+        
+    def update_levels(self, audio_data):
+        if audio_data is None:
+            self.levels = [0] * self.bars
+        else:
+            # Convert audio data to levels
+            chunk_size = len(audio_data) // self.bars
+            new_levels = []
+            for i in range(self.bars):
+                start = i * chunk_size
+                end = start + chunk_size
+                chunk = audio_data[start:end]
+                level = float(np.abs(chunk).mean())
+                new_levels.append(min(1.0, level * 3))  # Amplify for visibility
+            self.levels = new_levels
+        self.draw_bars()
+        
+    def draw_bars(self):
+        self.delete("all")
+        for i, level in enumerate(self.levels):
+            x = i * (self.bar_width + 1) + 1
+            height = int(level * self.height)
+            # Color gradient from green to yellow to red
+            if level < 0.5:
+                color = '#2ecc71'  # green
+            elif level < 0.8:
+                color = '#f1c40f'  # yellow
+            else:
+                color = '#e74c3c'  # red
+            
+            self.create_rectangle(
+                x, self.height - height,
+                x + self.bar_width, self.height,
+                fill=color, outline=''
+            )
 
 class SentimentAnalysisGUI:
     def __init__(self, root):
@@ -430,13 +431,12 @@ class SentimentAnalysisGUI:
             self.status_label.config(text=f"Processing video file: {os.path.basename(filepath)}")
             self.file_info_label.config(text=f"File: {os.path.basename(filepath)}")
             
-            # Extract audio from video
-            video = VideoFileClip(filepath)
+            # Extract audio from video using pydub
+            audio = AudioSegment.from_file(filepath)
             
             # Create temporary audio file
             temp_audio = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            video.audio.write_audiofile(temp_audio.name)
-            video.close()
+            audio.export(temp_audio.name, format='wav')
             
             # Process the extracted audio
             self.process_audio_file(temp_audio.name)
