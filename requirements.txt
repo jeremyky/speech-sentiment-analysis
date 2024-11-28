@@ -13,4 +13,6 @@ moviepy>=1.0.3
 pydub>=0.25.1
 ffmpeg-python>=0.2.0
 soundfile>=0.12.1
-libsndfile>=1.0.31  # Required by soundfile
+datasets>=2.0.0  # Added for evaluation
+scikit-learn>=1.0.0  # Added for metrics
+torchtext>=0.15.0  # Added for MultiBench
