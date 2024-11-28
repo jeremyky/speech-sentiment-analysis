@@ -68,49 +68,44 @@ class EmotionDisplay(ttk.Frame):
             bar['value'] = emotion['score'] * 100
 
 class AudioMeter(tk.Canvas):
-    def __init__(self, parent, width=400, height=60, **kwargs):
+    def __init__(self, parent, width=60, height=200, **kwargs):
         super().__init__(parent, width=width, height=height, **kwargs)
         self.width = width
         self.height = height
         self.configure(bg='black')
-        self.bars = 30
-        self.bar_width = (width - (self.bars + 1)) / self.bars
-        self.levels = [0] * self.bars
+        self.level = 0
         
     def update_levels(self, audio_data):
         if audio_data is None:
-            self.levels = [0] * self.bars
+            self.level = 0
         else:
-            # Convert audio data to levels
-            chunk_size = len(audio_data) // self.bars
-            new_levels = []
-            for i in range(self.bars):
-                start = i * chunk_size
-                end = start + chunk_size
-                chunk = audio_data[start:end]
-                level = float(np.abs(chunk).mean())
-                new_levels.append(min(1.0, level * 3))  # Amplify for visibility
-            self.levels = new_levels
-        self.draw_bars()
+            # Simple amplitude-based level detection
+            level = float(np.abs(audio_data).mean())
+            # Simple scaling
+            self.level = min(1.0, level * 3)  # Scale factor of 3
+        self.draw_bar()
         
-    def draw_bars(self):
+    def draw_bar(self):
         self.delete("all")
-        for i, level in enumerate(self.levels):
-            x = i * (self.bar_width + 1) + 1
-            height = int(level * self.height)
-            # Color gradient from green to yellow to red
-            if level < 0.5:
-                color = '#2ecc71'  # green
-            elif level < 0.8:
-                color = '#f1c40f'  # yellow
-            else:
-                color = '#e74c3c'  # red
-            
-            self.create_rectangle(
-                x, self.height - height,
-                x + self.bar_width, self.height,
-                fill=color, outline=''
-            )
+        height = int(self.level * self.height)
+        
+        # Color based on level
+        if self.level < 0.3:
+            color = '#2ecc71'  # green
+        elif self.level < 0.6:
+            color = '#f1c40f'  # yellow
+        else:
+            color = '#e74c3c'  # red
+        
+        # Draw single vertical bar
+        self.create_rectangle(
+            5,  # Left padding
+            self.height - height,  # Top
+            self.width - 5,  # Right padding
+            self.height,  # Bottom
+            fill=color,
+            outline=''
+        )
 
 class SentimentAnalysisGUI:
     def __init__(self, root):
