@@ -1,121 +1,164 @@
-# Real-Time Speech-to-Sentiment Analysis
+Real-Time Speech-to-Sentiment Analysis
 
-This project combines speech recognition and sentiment analysis to understand human emotions in real-time conversations using OpenAI's Whisper for speech recognition and DistilBERT for sentiment analysis.
+This project combines speech recognition and sentiment analysis to understand human emotions in real-time conversations. It uses OpenAI's Whisper for speech recognition and various emotion detection models for sentiment analysis.
 
-## Prerequisites
+Features:
+- Real-time speech-to-text transcription
+- Multiple emotion detection modes:
+  - Basic (Positive/Negative)
+  - Standard (7 basic emotions)
+  - Detailed (17 emotions from GoEmotions)
+- Audio file upload and processing
+- Video file audio extraction and analysis
+- Audio recording and playback
+- Visual audio level meter
+- Real-time emotion visualization
+- Configurable analysis modes (segment or full transcript)
+- Save and manage recordings
 
+Prerequisites:
 - Python 3.8 or higher
 - A working microphone
 - Git (for cloning the repository)
 - FFmpeg (required for audio processing)
 
-## Installation
+Installing FFmpeg:
 
-1. Install FFmpeg:
-
-**For macOS:**
+macOS:
 brew install ffmpeg
+brew install portaudio
 
-**For Windows:**
+Windows:
 Download from https://ffmpeg.org/download.html
 
-**For Ubuntu/Debian:**
+Ubuntu/Debian:
 sudo apt-get install ffmpeg
+sudo apt-get install libportaudio2
 
-2. Clone the repository:
+Installation Steps:
+
+1. Clone the repository:
 git clone <repository-url>
 cd speech-sentiment
 
-3. Create and activate a virtual environment:
-
-**For Windows:**
+2. Create and activate a virtual environment:
 python -m venv venv
-venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-**For macOS/Linux:**
-python -m venv venv
-source venv/bin/activate
-
-4. Install the required packages:
+3. Install the required packages:
 pip install -r requirements.txt
 
-5. Set up Hugging Face access:
+4. Set up Hugging Face access:
 pip install --upgrade huggingface_hub
 huggingface-cli login
 # Enter your access token from https://huggingface.co/settings/tokens
 
-## Project Structure
+Configuration:
+
+The project uses two main configuration files in the config directory:
+
+config.yaml:
+- Controls model selection and basic settings
+- Choose emotion detection mode:
+  - "basic": Simple positive/negative
+  - "standard": 7 basic emotions
+  - "detailed": 17 detailed emotions
+
+emotions.yaml:
+- Defines available emotions for each mode
+- Configures colors and thresholds
+- Sets number of emotions to display (top_k)
+
+Usage:
+
+1. Start the application:
+python run.py
+
+2. Real-time Recording:
+- Click "Start Recording" to begin
+- Speak into your microphone
+- Recording automatically stops after 5 seconds
+- View transcription and emotion analysis
+- Choose to:
+  - Start a new recording (clears previous)
+  - Continue recording (adds to existing)
+
+3. File Processing:
+- Click "Upload Audio File" for audio files
+- Click "Upload Video File" for video files
+- Supported formats: wav, mp3, m4a, aac, flac, mp4, mov, avi, mkv
+
+4. Analysis Modes:
+- "Analyze Current Segment": Shows emotions for latest recording
+- "Analyze Full Transcript": Shows emotions for entire session
+
+5. Recording Management:
+- Play Recording: Listen to current recording
+- Save Recording: Save audio and transcript with timestamp
+
+Project Structure:
 
 speech-sentiment/
-├── requirements.txt
+├── config/
+│   ├── config.yaml        # Main configuration
+│   └── emotions.yaml      # Emotion definitions
 ├── src/
-│   ├── __init__.py
-│   ├── main.py
+│   ├── main.py           # GUI and main application
 │   ├── speech_recognition/
-│   │   └── whisper_client.py
-│   └── sentiment_analysis/
-│       └── bert_model.py
+│   │   └── whisper_client.py    # Speech recognition
+│   ├── sentiment_analysis/
+│   │   └── bert_model.py        # Emotion detection
+│   └── utils/
+│       └── config_manager.py    # Configuration handling
+├── recordings/           # Saved recordings directory
+├── requirements.txt     # Dependencies
+└── run.py              # Entry point
 
-## Usage
+Emotion Detection Modes:
 
-1. Make sure your microphone is connected and working.
+1. Basic Mode:
+- POSITIVE (Green)
+- NEGATIVE (Red)
 
-2. Run the main script:
-python src/main.py
+2. Standard Mode:
+- Joy (Green)
+- Surprise (Yellow)
+- Neutral (Gray)
+- Sadness (Blue)
+- Anger (Red)
+- Fear (Purple)
+- Disgust (Turquoise)
 
-3. The program will:
-   - Start listening for speech (5-second intervals by default)
-   - Transcribe the speech using Whisper
-   - Analyze the sentiment (positive/negative) using DistilBERT
-   - Display the results in the console
+3. Detailed Mode:
+- All standard emotions plus:
+- Love, Admiration, Excitement
+- Gratitude, Pride, Optimism
+- Relief, Confusion, Remorse
+- Disappointment
 
-4. To stop the program, press Ctrl+C
+Troubleshooting:
 
-## Output Format
+1. Audio Issues:
+- Check microphone connection
+- Verify microphone permissions
+- Run python -m sounddevice to list devices
 
-The program will output:
-- The transcribed text from your speech
-- A sentiment label (POSITIVE/NEGATIVE) with a confidence score
+2. Model Loading Issues:
+- Ensure Hugging Face login is complete
+- Check internet connection
+- Verify token permissions
 
-## Troubleshooting
+3. File Processing Issues:
+- Ensure FFmpeg is installed
+- Check file format compatibility
+- Verify file permissions
 
-### Common Issues:
+Contributing:
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-1. **FFmpeg not found:**
-   - Make sure FFmpeg is installed and accessible from your command line
-   - Try running `ffmpeg -version` to verify the installation
-
-2. **Microphone not detected:**
-   - Ensure your microphone is properly connected
-   - Check if it's set as the default input device
-   - Try running `python -m sounddevice` to list available devices
-
-3. **Hugging Face authentication:**
-   - If you get authentication errors, ensure you've logged in with `huggingface-cli login`
-   - Verify your token has 'read' permissions
-   - Try regenerating your token at https://huggingface.co/settings/tokens
-
-4. **CUDA/GPU errors:**
-   - The project works with CPU by default
-   - For GPU support, install the appropriate CUDA toolkit version for your system
-
-5. **Memory issues:**
-   - Try using a smaller Whisper model by modifying the model_size parameter in WhisperTranscriber
-   - Available sizes: "tiny", "base", "small", "medium", "large"
-
-### Audio Device Selection
-
-If you have multiple audio input devices, you can specify which one to use by modifying the `record_audio` method in `whisper_client.py` to include the device ID:
-
-audio = sd.rec(
-    int(duration * self.sample_rate),
-    samplerate=self.sample_rate,
-    channels=1,
-    device=DEVICE_ID  # Add your device ID here
-)
-
-## Acknowledgments
-
-- OpenAI Whisper for speech recognition
-- Hugging Face Transformers for DistilBERT implementation
-- The DistilBERT model fine-tuned on SST-2 dataset for sentiment analysis
+License:
+This project is licensed under the MIT License - see the LICENSE file for details.
