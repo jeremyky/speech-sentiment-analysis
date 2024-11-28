@@ -37,7 +37,8 @@ class WhisperTranscriber:
     def transcribe_realtime(self, duration=None):
         """Record and transcribe in one step"""
         audio = self.record_audio(duration)
-        return self.transcribe_audio(audio)
+        transcription = self.transcribe_audio(audio)
+        return transcription, audio
 
     def transcribe_file(self, filepath):
         """Transcribe audio from file"""

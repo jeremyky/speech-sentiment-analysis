@@ -13,6 +13,8 @@ import contextlib
 import tempfile
 from pydub import AudioSegment
 from pydub.utils import mediainfo
+from datetime import datetime
+import soundfile as sf
 
 # Try to import video functionality, but make it optional
 try:
@@ -121,6 +123,9 @@ class SentimentAnalysisGUI:
         self.cycle_time = 5  # 5 seconds per cycle
         self.current_transcription = ""
         self.analyze_full_text = False
+        self.recordings_dir = "recordings"
+        os.makedirs(self.recordings_dir, exist_ok=True)
+        self.recorded_audio = None
         
         self.setup_gui()
         
@@ -243,6 +248,27 @@ class SentimentAnalysisGUI:
             value="full"
         ).pack(side='left', padx=5)
         
+        # Recordings Frame
+        recordings_frame = ttk.LabelFrame(self.root, text="Recording Controls")
+        recordings_frame.pack(pady=5, padx=20, fill='x')
+        
+        # Playback controls
+        self.play_button = ttk.Button(
+            recordings_frame,
+            text="Play Recording",
+            command=self.play_recording,
+            state='disabled'
+        )
+        self.play_button.pack(side='left', padx=5)
+        
+        self.save_button = ttk.Button(
+            recordings_frame,
+            text="Save Recording",
+            command=self.save_recording,
+            state='disabled'
+        )
+        self.save_button.pack(side='left', padx=5)
+        
     def toggle_recording(self):
         if not self.is_recording:
             self.start_recording()
@@ -315,10 +341,20 @@ class SentimentAnalysisGUI:
     def record_and_analyze(self):
         try:
             # Record and transcribe
-            transcription = self.transcriber.transcribe_realtime()
+            transcription, audio_data = self.transcriber.transcribe_realtime()
             if transcription and not transcription.isspace():
                 self.current_transcription += f"{transcription}\n"
                 self.root.after(0, self.update_transcription, self.current_transcription)
+                
+                # Store the recorded audio
+                if self.recorded_audio is None:
+                    self.recorded_audio = audio_data
+                else:
+                    self.recorded_audio = np.concatenate((self.recorded_audio, audio_data))
+                
+                # Enable playback controls
+                self.play_button.config(state='normal')
+                self.save_button.config(state='normal')
                 
                 # Analyze sentiment based on mode
                 if self.analysis_mode.get() == "full":
@@ -441,6 +477,36 @@ class SentimentAnalysisGUI:
             
         except Exception as e:
             self.show_error(f"Error processing video: {str(e)}")
+
+    def play_recording(self):
+        """Play the current recording"""
+        if self.recorded_audio is not None:
+            try:
+                sd.play(self.recorded_audio, self.transcriber.sample_rate)
+                sd.wait()  # Wait until audio is finished playing
+            except Exception as e:
+                self.show_error(f"Error playing audio: {str(e)}")
+
+    def save_recording(self):
+        """Save the current recording with timestamp"""
+        if self.recorded_audio is not None:
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"recording_{timestamp}.wav"
+                filepath = os.path.join(self.recordings_dir, filename)
+                
+                # Save audio
+                sf.write(filepath, self.recorded_audio, self.transcriber.sample_rate)
+                
+                # Save transcription
+                transcript_path = os.path.join(self.recordings_dir, f"transcript_{timestamp}.txt")
+                with open(transcript_path, 'w') as f:
+                    f.write(self.current_transcription)
+                
+                self.status_label.config(text=f"Recording saved: {filename}")
+                
+            except Exception as e:
+                self.show_error(f"Error saving recording: {str(e)}")
 
 def main():
     root = tk.Tk()
