@@ -9,7 +9,7 @@ import torch
 from src.utils.config_manager import ConfigManager
 import datasets
 import numpy as np
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, precision_score, recall_score, f1_score, confusion_matrix
 
 class SentimentAnalyzer:
     def __init__(self):
@@ -207,3 +207,35 @@ class SentimentAnalyzer:
             print(f"Error during fine-tuning: {e}")
             import traceback
             traceback.print_exc()
+
+    def evaluate_metrics(self, predictions, ground_truth):
+        """Calculate precision, recall, F1 score for emotion detection"""
+        try:
+            # Calculate metrics
+            precision = precision_score(ground_truth, predictions, average='weighted')
+            recall = recall_score(ground_truth, predictions, average='weighted')
+            f1 = f1_score(ground_truth, predictions, average='weighted')
+            
+            # Print metrics
+            print("\nEmotion Detection Metrics:")
+            print("-" * 40)
+            print(f"Precision: {precision:.2%}")
+            print(f"Recall: {recall:.2%}")
+            print(f"F1 Score: {f1:.2%}")
+            print("-" * 40)
+            
+            # Create confusion matrix
+            cm = confusion_matrix(ground_truth, predictions)
+            print("\nConfusion Matrix:")
+            print(cm)
+            
+            return {
+                'precision': precision,
+                'recall': recall,
+                'f1': f1,
+                'confusion_matrix': cm
+            }
+            
+        except Exception as e:
+            print(f"Error calculating metrics: {e}")
+            return None

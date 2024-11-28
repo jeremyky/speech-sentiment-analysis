@@ -48,3 +48,47 @@ class WhisperTranscriber:
         except Exception as e:
             print(f"Error transcribing file: {e}")
             raise 
+
+    def calculate_wer(self, reference, hypothesis):
+        """Calculate Word Error Rate between reference and transcribed text"""
+        try:
+            # Tokenize into words
+            ref_words = reference.lower().split()
+            hyp_words = hypothesis.lower().split()
+            
+            # Calculate Levenshtein distance
+            d = self._levenshtein_distance(ref_words, hyp_words)
+            
+            # Calculate WER
+            wer = float(d) / float(len(ref_words))
+            
+            print("\nTranscription Metrics:")
+            print("-" * 40)
+            print(f"Word Error Rate: {wer:.2%}")
+            print("-" * 40)
+            
+            return wer
+            
+        except Exception as e:
+            print(f"Error calculating WER: {e}")
+            return None
+        
+    def _levenshtein_distance(self, ref, hyp):
+        """Helper function to calculate Levenshtein distance"""
+        m = len(ref)
+        n = len(hyp)
+        dp = [[0] * (n+1) for _ in range(m+1)]
+        
+        for i in range(m+1):
+            dp[i][0] = i
+        for j in range(n+1):
+            dp[0][j] = j
+            
+        for i in range(1, m+1):
+            for j in range(1, n+1):
+                if ref[i-1] == hyp[j-1]:
+                    dp[i][j] = dp[i-1][j-1]
+                else:
+                    dp[i][j] = min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]) + 1
+                    
+        return dp[m][n]
