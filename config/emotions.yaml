@@ -12,13 +12,13 @@ emotion_modes:
       top_k: 1
       threshold: 0.5
 
-  detailed:
+  standard:
     emotions:
       - label: "joy"
         color: "#2ecc71"  # Green
         threshold: 0.3
       - label: "surprise"
-        color: "#f1c40f"  # Yellow  
+        color: "#f1c40f"  # Yellow
         threshold: 0.3
       - label: "neutral"
         color: "#95a5a6"  # Gray
@@ -37,4 +37,45 @@ emotion_modes:
         threshold: 0.3
     model_config:
       top_k: 3
-      threshold: 0.2 
+      threshold: 0.2
+
+  detailed:
+    emotions:
+      - label: "joy"
+        color: "#2ecc71"  # Green
+        threshold: 0.3
+      - label: "surprise"
+        color: "#f1c40f"  # Yellow
+      - label: "neutral"
+        color: "#95a5a6"  # Gray
+      - label: "sadness"
+        color: "#3498db"  # Blue
+      - label: "anger"
+        color: "#e74c3c"  # Red
+      - label: "fear"
+        color: "#9b59b6"  # Purple
+      - label: "disgust"
+        color: "#1abc9c"  # Turquoise
+      - label: "love"
+        color: "#ff69b4"  # Pink
+      - label: "admiration"
+        color: "#ffd700"  # Gold
+      - label: "excitement"
+        color: "#ff8c00"  # Dark Orange
+      - label: "gratitude"
+        color: "#98fb98"  # Pale Green
+      - label: "pride"
+        color: "#4169e1"  # Royal Blue
+      - label: "optimism"
+        color: "#ffa07a"  # Light Salmon
+      - label: "relief"
+        color: "#87ceeb"  # Sky Blue
+      - label: "confusion"
+        color: "#dda0dd"  # Plum
+      - label: "remorse"
+        color: "#778899"  # Light Slate Gray
+      - label: "disappointment"
+        color: "#bc8f8f"  # Rosy Brown
+    model_config:
+      top_k: 5  # Show top 5 emotions
+      threshold: 0.2

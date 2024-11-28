@@ -1,21 +1,38 @@
-from transformers import pipeline
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    TrainingArguments,
+    Trainer,
+    pipeline
+)
 import torch
 from src.utils.config_manager import ConfigManager
+import datasets
+import numpy as np
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 class SentimentAnalyzer:
     def __init__(self):
         self.config = ConfigManager()
         self.emotion_config = self.config.get_emotion_config()
         
+        # Add debug prints
+        print(f"Using emotion mode: {self.config.main_config['model']['emotion_mode']}")
+        print(f"Available emotions: {[e['label'] for e in self.emotion_config['emotions']]}")
+        print(f"Top k emotions to show: {self.emotion_config['model_config']['top_k']}")
+        
         # Determine device (GPU if available, otherwise CPU)
         self.device = 0 if torch.cuda.is_available() else -1
         
         try:
+            model_path = self.config.get_model_path()
+            print(f"Loading model from: {model_path}")  # Debug print
+            
             self.sentiment_pipeline = pipeline(
                 "text-classification",
-                model=self.config.get_model_path(),
+                model=model_path,
                 top_k=self.emotion_config['model_config']['top_k'],
-                device=self.device  # Use GPU if available
+                device=self.device
             )
             print(f"Using {'GPU' if self.device == 0 else 'CPU'} for sentiment analysis")
         except OSError:
@@ -89,9 +106,18 @@ class SentimentAnalyzer:
             ]
             emotions.sort(key=lambda x: x['score'], reverse=True)
             
-            # Return top k emotions based on config
+            # Get top k emotions based on config
             top_k = self.emotion_config['model_config']['top_k']
-            return emotions[:top_k]
+            top_emotions = emotions[:top_k]
+            
+            # Print top emotions to command line
+            print("\nTop emotions detected:")
+            print("-" * 40)
+            for emotion in top_emotions:
+                print(f"{emotion['label'].capitalize()}: {emotion['score']:.1%}")
+            print("-" * 40)
+            
+            return top_emotions
             
         except Exception as e:
             print(f"Error in analyze_text: {e}")
@@ -99,7 +125,85 @@ class SentimentAnalyzer:
             traceback.print_exc()
             return [{'label': 'ERROR', 'score': 0.0, 'color': '#95a5a6'}]
 
-    def fine_tune(self, train_texts, train_labels):
+    def fine_tune(self, output_dir="fine_tuned_model"):
         """Fine-tune the model on GoEmotions dataset"""
-        # Implementation for fine-tuning will go here
-        pass
+        try:
+            # Load GoEmotions dataset
+            dataset = datasets.load_dataset("go_emotions", "raw")
+            
+            # Get list of emotions from config
+            emotions = [e['label'] for e in self.emotion_config['emotions']]
+            
+            def preprocess_data(examples):
+                # Convert multi-label format to our emotion categories
+                labels = [0] * len(emotions)
+                for emotion_idx in examples['labels']:
+                    if emotion_idx < len(emotions):
+                        labels[emotion_idx] = 1
+                return {
+                    'text': examples['text'],
+                    'labels': labels
+                }
+            
+            # Preprocess dataset
+            tokenized_dataset = dataset.map(
+                preprocess_data,
+                remove_columns=dataset['train'].column_names
+            )
+            
+            # Define training arguments
+            training_args = TrainingArguments(
+                output_dir=output_dir,
+                learning_rate=2e-5,
+                per_device_train_batch_size=16,
+                per_device_eval_batch_size=16,
+                num_train_epochs=3,
+                weight_decay=0.01,
+                evaluation_strategy="epoch",
+                save_strategy="epoch",
+                load_best_model_at_end=True,
+            )
+            
+            def compute_metrics(pred):
+                labels = pred.label_ids
+                preds = pred.predictions > 0.5
+                precision, recall, f1, _ = precision_recall_fscore_support(
+                    labels, preds, average='weighted'
+                )
+                acc = accuracy_score(labels, preds)
+                return {
+                    'accuracy': acc,
+                    'f1': f1,
+                    'precision': precision,
+                    'recall': recall
+                }
+            
+            # Initialize trainer
+            trainer = Trainer(
+                model=self.model,
+                args=training_args,
+                train_dataset=tokenized_dataset['train'],
+                eval_dataset=tokenized_dataset['validation'],
+                compute_metrics=compute_metrics,
+            )
+            
+            # Fine-tune the model
+            trainer.train()
+            
+            # Save the fine-tuned model
+            trainer.save_model(output_dir)
+            
+            # Update the pipeline with fine-tuned model
+            self.sentiment_pipeline = pipeline(
+                "text-classification",
+                model=output_dir,
+                top_k=self.emotion_config['model_config']['top_k'],
+                device=self.device
+            )
+            
+            print("Fine-tuning complete! Model saved to:", output_dir)
+            
+        except Exception as e:
+            print(f"Error during fine-tuning: {e}")
+            import traceback
+            traceback.print_exc()

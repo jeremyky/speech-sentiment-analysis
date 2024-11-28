@@ -1,10 +1,11 @@
 # Main configuration file
 model:
-  emotion_mode: "detailed"  # Can be "basic" or "detailed"
+  emotion_mode: "standard"  # Can be "basic", "standard", or "detailed"
   whisper_model_size: "base"
   sentiment_models:
     basic: "distilbert-base-uncased-finetuned-sst-2-english"
-    detailed: "j-hartmann/emotion-english-distilroberta-base"
+    standard: "j-hartmann/emotion-english-distilroberta-base"
+    detailed: "bhadresh-savani/bert-base-go-emotion"
   
 audio:
   sample_rate: 16000
