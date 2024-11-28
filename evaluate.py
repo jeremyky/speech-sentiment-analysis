@@ -3,9 +3,14 @@ from src.speech_recognition.whisper_client import WhisperTranscriber
 import numpy as np
 import os
 from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.metrics import precision_score, recall_score, f1_score
 import soundfile as sf
 import glob
 import kagglehub
+import librosa
+import tempfile
+import traceback
+import json
 
 def download_ravdess():
     """Download RAVDESS dataset using kagglehub"""
@@ -149,18 +154,218 @@ def evaluate_sentiment_analysis():
         import traceback
         traceback.print_exc()
 
-def main():
-    print("Starting Evaluation...")
+def evaluate_speech_recognition_robustness():
+    """Evaluate speech recognition under different conditions"""
+    print("\nSpeech Recognition Robustness Evaluation:")
+    print("-" * 50)
+    
     try:
-        # First evaluate speech recognition
-        evaluate_speech_recognition()
+        dataset_path = download_ravdess()
+        if not dataset_path:
+            return
         
-        # Then evaluate sentiment analysis
+        transcriber = WhisperTranscriber()
+        
+        # Test different conditions
+        conditions = {
+            "normal": lambda x: x,  # No modification
+            "noise": lambda x: x + np.random.normal(0, 0.01, len(x)),  # Add noise
+            "speed_up": lambda x: librosa.effects.time_stretch(x, rate=1.2),  # Speed up
+            "slow_down": lambda x: librosa.effects.time_stretch(x, rate=0.8),  # Slow down
+            "low_quality": lambda x: librosa.resample(x, orig_sr=16000, target_sr=8000)  # Lower quality
+        }
+        
+        for condition, modifier in conditions.items():
+            print(f"\nTesting condition: {condition}")
+            total_wer = 0
+            successful_tests = 0
+            
+            # Test first 5 samples for each condition
+            audio_files = glob.glob(os.path.join(dataset_path, "**/*.wav"), recursive=True)[:5]
+            
+            for audio_file in audio_files:
+                # Load and modify audio
+                audio, sr = sf.read(audio_file)
+                modified_audio = modifier(audio)
+                
+                # Get ground truth
+                filename = os.path.basename(audio_file)
+                parts = filename.split("-")
+                text = "Kids are talking by the door" if parts[4] == "01" else "Dogs are sitting by the door"
+                
+                # Test transcription
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio:
+                    sf.write(temp_audio.name, modified_audio, sr)
+                    transcription = transcriber.transcribe_file(temp_audio.name)
+                    wer = transcriber.calculate_wer(text, transcription)
+                    total_wer += wer
+                    successful_tests += 1
+                    os.unlink(temp_audio.name)
+            
+            print(f"Average WER for {condition}: {total_wer/successful_tests:.2%}")
+            
+    except Exception as e:
+        print(f"Error in robustness evaluation: {e}")
+        traceback.print_exc()
+
+def evaluate_sentiment_analysis_edge_cases():
+    """Evaluate sentiment analysis on edge cases"""
+    print("\nSentiment Analysis Edge Cases Evaluation:")
+    print("-" * 50)
+    
+    try:
+        analyzer = SentimentAnalyzer()
+        
+        edge_cases = [
+            {
+                "text": "I'm happy but also a bit nervous about the presentation.",
+                "ground_truth": ["joy", "fear"],
+                "category": "Mixed emotions"
+            },
+            {
+                "text": "This is just a normal day, nothing special.",
+                "ground_truth": ["neutral"],
+                "category": "Neutral"
+            },
+            {
+                "text": "😊 This makes me so happy! 🎉",
+                "ground_truth": ["joy"],
+                "category": "With emojis"
+            },
+            {
+                "text": "ABSOLUTELY FURIOUS!!!",
+                "ground_truth": ["anger"],
+                "category": "All caps"
+            },
+            {
+                "text": "i guess im kinda sad... idk...",
+                "ground_truth": ["sadness"],
+                "category": "Informal text"
+            }
+        ]
+        
+        all_predictions = []
+        all_ground_truth = []
+        
+        print("\nEdge Case Results:")
+        print("-" * 50)
+        
+        for i, test in enumerate(edge_cases, 1):
+            print(f"\nTest Case {i} ({test['category']}):")
+            print(f"Text: {test['text']}")
+            print(f"Ground Truth Emotions: {test['ground_truth']}")
+            
+            # Get emotion predictions
+            emotions = analyzer.analyze_text(test['text'])
+            predictions = [emotion["label"].lower() for emotion in emotions if emotion["score"] > 0.2]
+            
+            # Store for metrics
+            all_predictions.append(predictions)
+            all_ground_truth.append(test["ground_truth"])
+            
+            print(f"Predicted Emotions: {predictions}")
+            print("\nDetailed Scores:")
+            print("-" * 40)
+            for emotion in emotions:
+                print(f"{emotion['label'].capitalize()}: {emotion['score']:.1%}")
+        
+        # Calculate metrics
+        mlb = MultiLabelBinarizer()
+        y_true = mlb.fit_transform(all_ground_truth)
+        y_pred = mlb.transform(all_predictions)
+        
+        from sklearn.metrics import precision_score, recall_score, f1_score
+        precision = precision_score(y_true, y_pred, average='weighted')
+        recall = recall_score(y_true, y_pred, average='weighted')
+        f1 = f1_score(y_true, y_pred, average='weighted')
+        
+        print("\nEdge Case Metrics:")
+        print("-" * 40)
+        print(f"Precision: {precision:.2%}")
+        print(f"Recall: {recall:.2%}")
+        print(f"F1 Score: {f1:.2%}")
+        print("\nEmotion Labels:", mlb.classes_)
+            
+    except Exception as e:
+        print(f"Error in edge case evaluation: {e}")
+        import traceback
+        traceback.print_exc()
+
+def evaluate_end_to_end():
+    """Evaluate complete pipeline: audio -> text -> emotion"""
+    print("\nEnd-to-End Pipeline Evaluation:")
+    print("-" * 50)
+    
+    try:
+        dataset_path = download_ravdess()
+        if not dataset_path:
+            return
+        
+        transcriber = WhisperTranscriber()
+        analyzer = SentimentAnalyzer()
+        
+        # RAVDESS emotion mapping
+        emotion_map = {
+            "01": "neutral",
+            "02": "calm",
+            "03": "joy",
+            "04": "sadness",
+            "05": "anger",
+            "06": "fear",
+            "07": "disgust",
+            "08": "surprise"
+        }
+        
+        total_matches = 0
+        total_tests = 0
+        
+        # Test first 10 samples
+        audio_files = glob.glob(os.path.join(dataset_path, "**/*.wav"), recursive=True)[:10]
+        
+        for audio_file in audio_files:
+            # Get ground truth emotion from filename
+            filename = os.path.basename(audio_file)
+            parts = filename.split("-")
+            ground_truth_emotion = emotion_map[parts[2]]
+            
+            # Run complete pipeline
+            transcription = transcriber.transcribe_file(audio_file)
+            emotions = analyzer.analyze_text(transcription)
+            predicted_emotion = emotions[0]["label"].lower() if emotions else "unknown"
+            
+            print(f"\nTest Case {total_tests + 1}:")
+            print(f"Audio: {filename}")
+            print(f"Transcription: {transcription}")
+            print(f"Ground Truth Emotion: {ground_truth_emotion}")
+            print(f"Predicted Emotion: {predicted_emotion}")
+            
+            if predicted_emotion == ground_truth_emotion:
+                total_matches += 1
+            total_tests += 1
+        
+        print("\nEnd-to-End Results:")
+        print("-" * 40)
+        print(f"Accuracy: {total_matches/total_tests:.2%}")
+        
+    except Exception as e:
+        print(f"Error in end-to-end evaluation: {e}")
+        import traceback
+        traceback.print_exc()
+
+def main():
+    print("Starting Comprehensive Evaluation...")
+    try:
+        # Basic evaluations
+        evaluate_speech_recognition()
         evaluate_sentiment_analysis()
+        
+        # Advanced evaluations
+        evaluate_speech_recognition_robustness()
+        evaluate_sentiment_analysis_edge_cases()
+        evaluate_end_to_end()
         
     except Exception as e:
         print(f"Error during evaluation: {e}")
-        import traceback
         traceback.print_exc()
 
 if __name__ == "__main__":
