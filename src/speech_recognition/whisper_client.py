@@ -37,7 +37,7 @@ class WhisperTranscriber:
             return result["text"]
 
     def transcribe_realtime(self, audio_data):
-        """Transcribe audio in real-time with better handling"""
+        """Transcribe audio in real-time with improved handling"""
         try:
             # Convert to float32 if not already
             if audio_data.dtype != np.float32:
@@ -46,15 +46,48 @@ class WhisperTranscriber:
             # Normalize audio
             audio_data = librosa.util.normalize(audio_data)
             
-            # Transcribe with Whisper
-            result = self.model.transcribe(
-                audio_data,
-                language='en',
-                task='transcribe',
-                fp16=False  # Use FP32 for CPU
+            # Apply voice activity detection with stricter threshold
+            intervals = librosa.effects.split(
+                audio_data, 
+                top_db=30,  # Increased from 20 to 30 for stricter VAD
+                frame_length=2048,
+                hop_length=512
             )
             
-            return result["text"].strip(), audio_data
+            # If no voice activity detected, return empty
+            if len(intervals) == 0:
+                return "", audio_data
+            
+            # Calculate average energy
+            energy = np.mean(np.abs(audio_data))
+            if energy < 0.01:  # Threshold for silence
+                return "", audio_data
+            
+            # Keep only voice segments
+            y_voice = np.concatenate([audio_data[start:end] for start, end in intervals])
+            
+            # Transcribe with Whisper using better parameters
+            result = self.model.transcribe(
+                y_voice,
+                language='en',
+                task='transcribe',
+                fp16=False,
+                best_of=1,
+                beam_size=1,
+                condition_on_previous_text=True,
+                no_speech_threshold=0.6,  # Increased threshold for "no speech" detection
+                initial_prompt=""  # Removed the prompt
+            )
+            
+            # Only return text if confidence is high enough
+            if result.get("no_speech_prob", 0) > 0.5:
+                return "", audio_data
+            
+            text = result["text"].strip()
+            # Remove the prompt if it somehow appears
+            text = text.replace("The following is a transcription of speech:", "").strip()
+            
+            return text, audio_data
             
         except Exception as e:
             print(f"Error in real-time transcription: {e}")
