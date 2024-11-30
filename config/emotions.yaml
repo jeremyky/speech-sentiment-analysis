@@ -38,20 +38,33 @@ emotion_modes:
 
   detailed:
     emotions:
-      - label: "happiness"
-        color: "#2ecc71"  # Green
-      - label: "sadness" 
-        color: "#3498db"  # Blue
+      # Primary emotions
+      - label: "joy"
+        variations: ["excited", "content", "proud", "relieved"]
+        intensity_levels: ["slightly", "moderately", "very", "extremely"]
+      - label: "sadness"
+        variations: ["disappointed", "lonely", "hopeless", "grief"]
+        intensity_levels: ["slightly", "moderately", "very", "extremely"]
       - label: "anger"
-        color: "#e74c3c"  # Red
+        variations: ["frustrated", "irritated", "outraged", "furious"]
+        intensity_levels: ["slightly", "moderately", "very", "extremely"]
       - label: "fear"
-        color: "#9b59b6"  # Purple
-      - label: "disgust"
-        color: "#1abc9c"  # Turquoise
-      - label: "surprise"
-        color: "#f1c40f"  # Yellow
+        variations: ["anxious", "nervous", "terrified", "panicked"]
+        intensity_levels: ["slightly", "moderately", "very", "extremely"]
+      
+      # Complex emotions
+      - label: "bittersweet"
+        combinations: ["joy", "sadness"]
+      - label: "anxious-excitement"
+        combinations: ["joy", "fear"]
+      - label: "indignant"
+        combinations: ["anger", "disgust"]
+      
+      # Neutral states
       - label: "neutral"
-        color: "#95a5a6"  # Gray
-    model_config:
-      top_k: 5
-      threshold: 0.2
+        variations: ["calm", "composed", "balanced"]
+    
+    analysis_config:
+      segment_size: 50  # words per segment
+      overlap: 10       # words overlap between segments
+      threshold: 0.2    # emotion detection threshold

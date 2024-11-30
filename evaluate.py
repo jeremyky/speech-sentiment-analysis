@@ -399,6 +399,151 @@ def evaluate_end_to_end():
         import traceback
         traceback.print_exc()
 
+def analyze_long_text(text, analyzer):
+    """Analyze emotions in longer text with segmentation"""
+    # Split text into words
+    words = text.split()
+    
+    # Configuration
+    segment_size = 50
+    overlap = 10
+    
+    # Initialize results
+    segments = []
+    overall_emotions = {}
+    
+    # Process text in segments
+    for i in range(0, len(words), segment_size - overlap):
+        # Get segment
+        segment = " ".join(words[i:i + segment_size])
+        
+        # Get emotions for segment
+        emotions = analyzer.analyze_text(segment)
+        
+        # Store segment results
+        segment_result = {
+            "text": segment,
+            "start_word": i,
+            "end_word": min(i + segment_size, len(words)),
+            "emotions": emotions
+        }
+        segments.append(segment_result)
+        
+        # Aggregate emotions for overall analysis
+        for emotion in emotions:
+            if emotion["label"] not in overall_emotions:
+                overall_emotions[emotion["label"]] = []
+            overall_emotions[emotion["label"]].append(emotion["score"])
+    
+    # Calculate overall emotion scores
+    overall_scores = {
+        label: np.mean(scores) for label, scores in overall_emotions.items()
+    }
+    
+    return {
+        "segments": segments,
+        "overall_emotions": [
+            {"label": label, "score": score} 
+            for label, score in sorted(overall_scores.items(), key=lambda x: x[1], reverse=True)
+        ]
+    }
+
+def evaluate_long_text_analysis():
+    """Evaluate emotion analysis on longer texts"""
+    print("\nLong Text Emotion Analysis Evaluation:")
+    print("-" * 50)
+    
+    analyzer = SentimentAnalyzer()
+    
+    test_cases = [
+        {
+            "text": """I started the day feeling really excited about the presentation. 
+                      As I prepared, I got increasingly nervous, but tried to stay focused. 
+                      During the actual presentation, I was initially terrified, but as people 
+                      responded positively, I grew more confident. By the end, I felt incredibly 
+                      proud of what I'd accomplished, though slightly exhausted.""",
+            "expected_emotions": {
+                "overall": ["pride", "anxiety", "relief"],
+                "segments": {
+                    "start": ["excitement", "nervousness"],
+                    "middle": ["fear", "growing_confidence"],
+                    "end": ["pride", "exhaustion"]
+                }
+            }
+        }
+        # Add more test cases...
+    ]
+    
+    for i, test in enumerate(test_cases, 1):
+        print(f"\nTest Case {i}:")
+        print(f"Text: {test['text']}\n")
+        
+        results = analyze_long_text(test['text'], analyzer)
+        
+        print("Overall Emotions:")
+        print("-" * 40)
+        for emotion in results["overall_emotions"][:3]:
+            print(f"{emotion['label'].capitalize()}: {emotion['score']:.1%}")
+        
+        print("\nSegment Analysis:")
+        print("-" * 40)
+        for i, segment in enumerate(results["segments"], 1):
+            print(f"\nSegment {i} (Words {segment['start_word']}-{segment['end_word']}):")
+            print(f"Text: {segment['text'][:100]}...")
+            print("Top Emotions:")
+            for emotion in segment["emotions"][:2]:
+                print(f"{emotion['label'].capitalize()}: {emotion['score']:.1%}")
+
+def analyze_hierarchical_text(text, analyzer):
+    """Analyze emotions at multiple text levels: overall, paragraph, sentence"""
+    
+    # Split into paragraphs
+    paragraphs = text.split('\n\n')
+    
+    # Initialize results structure
+    results = {
+        "overall": {},
+        "paragraphs": [],
+        "sentences": []
+    }
+    
+    # Overall analysis
+    overall_emotions = analyzer.analyze_text(text)
+    results["overall"] = {
+        "text": text,
+        "emotions": overall_emotions,
+        "dominant_emotion": overall_emotions[0] if overall_emotions else None
+    }
+    
+    # Paragraph analysis
+    for i, para in enumerate(paragraphs):
+        if not para.strip():
+            continue
+            
+        para_emotions = analyzer.analyze_text(para)
+        results["paragraphs"].append({
+            "index": i,
+            "text": para,
+            "emotions": para_emotions,
+            "dominant_emotion": para_emotions[0] if para_emotions else None
+        })
+        
+    # Sentence analysis
+    import nltk
+    nltk.download('punkt', quiet=True)
+    sentences = nltk.sent_tokenize(text)
+    
+    for i, sentence in enumerate(sentences):
+        sent_emotions = analyzer.analyze_text(sentence)
+        results["sentences"].append({
+            "index": i,
+            "text": sentence,
+            "emotions": sent_emotions,
+            "dominant_emotion": sent_emotions[0] if sent_emotions else None
+        })
+    
+    return results
+
 def main():
     print("Starting Comprehensive Evaluation...")
     try:
@@ -410,6 +555,7 @@ def main():
         evaluate_speech_recognition_robustness()
         evaluate_sentiment_analysis_edge_cases()
         evaluate_end_to_end()
+        evaluate_long_text_analysis()
         
     except Exception as e:
         print(f"Error during evaluation: {e}")
