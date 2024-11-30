@@ -16,6 +16,7 @@ from pydub.utils import mediainfo
 from datetime import datetime
 import soundfile as sf
 from src.sentiment_analysis.evaluate import analyze_hierarchical_text
+import librosa
 
 # Try to import video functionality, but make it optional
 try:
@@ -186,143 +187,36 @@ class SentimentAnalysisGUI:
         self.update_audio_meter()
         
     def setup_gui(self):
-        # Add File Upload Frame at the top
-        upload_frame = ttk.LabelFrame(self.root, text="File Upload")
-        upload_frame.pack(pady=5, padx=20, fill='x')
+        """Setup GUI components"""
+        # Create main controls frame
+        controls_frame = ttk.Frame(self.root)
+        controls_frame.pack(pady=10)
         
-        # Audio File Upload Button
-        self.audio_upload_btn = ttk.Button(
-            upload_frame,
-            text="Upload Audio File",
-            command=self.upload_audio
-        )
-        self.audio_upload_btn.pack(side='left', padx=5, pady=5)
-        
-        # Video File Upload Button
-        self.video_upload_btn = ttk.Button(
-            upload_frame,
-            text="Upload Video File",
-            command=self.upload_video
-        )
-        self.video_upload_btn.pack(side='left', padx=5, pady=5)
-        
-        # File info label
-        self.file_info_label = ttk.Label(
-            upload_frame,
-            text="No file selected",
-            font=('Arial', 10)
-        )
-        self.file_info_label.pack(side='left', padx=10)
-        
-        # Control Panel Frame
-        control_frame = ttk.Frame(self.root)
-        control_frame.pack(pady=5, padx=20, fill='x')
-        
-        # Single Record Button
+        # Create record button
         self.record_button = ttk.Button(
-            control_frame, 
-            text="Start Recording", 
+            controls_frame,
+            text="Start Recording",
             command=self.toggle_recording
         )
         self.record_button.pack(side='left', padx=5)
         
-        # Post-Recording Controls Frame (initially hidden)
-        self.post_record_frame = ttk.Frame(control_frame)
-        self.post_record_frame.pack(side='left', padx=5)
-        
-        # New Recording Button (initially hidden)
-        self.new_recording_button = ttk.Button(
-            self.post_record_frame,
-            text="New Recording",
-            command=self.start_new_recording
-        )
-        
-        # Continue Recording Button (initially hidden)
-        self.continue_recording_button = ttk.Button(
-            self.post_record_frame,
-            text="Continue Recording",
-            command=self.continue_recording
-        )
-        
-        # Timer display
-        self.timer_frame = ttk.Frame(self.root)
-        self.timer_frame.pack(pady=5)
-        self.timer_label = ttk.Label(
-            self.timer_frame, 
-            text="Time remaining: --",
-            font=('Arial', 12)
-        )
-        self.timer_label.pack(side='left', padx=5)
-        
-        # Status label
-        self.status_label = ttk.Label(
-            self.root, 
-            text="Click 'Start Recording' to begin", 
-            font=('Arial', 12)
-        )
-        self.status_label.pack(pady=5)
-        
-        # Audio meter
-        self.audio_meter = AudioMeter(self.root)
-        self.audio_meter.pack(pady=10, padx=20)
-        
-        # Transcription display
-        ttk.Label(
-            self.root, 
-            text="Transcription:", 
-            font=('Arial', 10, 'bold')
-        ).pack(pady=5)
-        self.transcription_text = tk.Text(
-            self.root,
-            height=10,
-            width=50,
-            wrap=tk.WORD,
-            font=('Arial', 10)
-        )
-        self.transcription_text.pack(pady=10, padx=20)
-        
-        # Emotion analysis display
-        ttk.Label(
-            self.root, 
-            text="Emotion Analysis:", 
-            font=('Arial', 10, 'bold')
-        ).pack(pady=5)
-        self.emotion_text = tk.Text(
-            self.root,
-            height=10,
-            width=50,
-            wrap=tk.WORD,
-            font=('Arial', 10)
-        )
-        self.emotion_text.pack(pady=10, padx=20)
-        
-        # Add Analysis Mode Frame
-        analysis_frame = ttk.LabelFrame(self.root, text="Analysis Mode")
-        analysis_frame.pack(pady=5, padx=20, fill='x')
-        
-        # Add radio buttons for analysis mode
-        self.analysis_mode = tk.StringVar(value="segment")
-        ttk.Radiobutton(
-            analysis_frame,
-            text="Analyze Current Segment",
-            variable=self.analysis_mode,
-            value="segment"
+        # Create upload buttons
+        ttk.Button(
+            controls_frame,
+            text="Upload Audio",
+            command=self.upload_audio
         ).pack(side='left', padx=5)
         
-        ttk.Radiobutton(
-            analysis_frame,
-            text="Analyze Full Transcript",
-            variable=self.analysis_mode,
-            value="full"
-        ).pack(side='left', padx=5)
+        if VIDEO_SUPPORT:
+            ttk.Button(
+                controls_frame,
+                text="Upload Video",
+                command=self.upload_video
+            ).pack(side='left', padx=5)
         
-        # Recordings Frame
-        recordings_frame = ttk.LabelFrame(self.root, text="Recording Controls")
-        recordings_frame.pack(pady=5, padx=20, fill='x')
-        
-        # Playback controls
+        # Create playback controls
         self.play_button = ttk.Button(
-            recordings_frame,
+            controls_frame,
             text="Play Recording",
             command=self.play_recording,
             state='disabled'
@@ -330,12 +224,56 @@ class SentimentAnalysisGUI:
         self.play_button.pack(side='left', padx=5)
         
         self.save_button = ttk.Button(
-            recordings_frame,
+            controls_frame,
             text="Save Recording",
             command=self.save_recording,
             state='disabled'
         )
         self.save_button.pack(side='left', padx=5)
+        
+        # Create status labels
+        self.status_label = ttk.Label(self.root, text="Ready")
+        self.status_label.pack(pady=5)
+        
+        self.file_info_label = ttk.Label(self.root, text="")
+        self.file_info_label.pack(pady=5)
+        
+        # Create audio meter
+        meter_frame = ttk.LabelFrame(self.root, text="Audio Level")
+        meter_frame.pack(pady=5, padx=20)
+        
+        self.audio_meter = AudioMeter(meter_frame)
+        self.audio_meter.pack(pady=5, padx=10)
+        
+        # Create transcription and emotion displays
+        display_frame = ttk.Frame(self.root)
+        display_frame.pack(pady=5, padx=20, fill='both', expand=True)
+        
+        # Left side: Transcription
+        left_frame = ttk.LabelFrame(display_frame, text="Transcription")
+        left_frame.pack(side='left', padx=5, fill='both', expand=True)
+        
+        self.transcription_text = tk.Text(
+            left_frame,
+            height=15,
+            width=40,
+            wrap=tk.WORD,
+            font=('Arial', 10)
+        )
+        self.transcription_text.pack(pady=5, padx=5, fill='both', expand=True)
+        
+        # Right side: Emotion Analysis
+        right_frame = ttk.LabelFrame(display_frame, text="Emotion Analysis")
+        right_frame.pack(side='right', padx=5, fill='both', expand=True)
+        
+        self.emotion_text = tk.Text(
+            right_frame,
+            height=15,
+            width=40,
+            wrap=tk.WORD,
+            font=('Arial', 10)
+        )
+        self.emotion_text.pack(pady=5, padx=5, fill='both', expand=True)
         
     def toggle_recording(self):
         """Toggle recording state"""
@@ -440,20 +378,32 @@ class SentimentAnalysisGUI:
             print(f"Error updating audio meter: {e}")
     
     def record_and_analyze(self):
-        """Record audio and analyze in real-time with better buffering"""
+        """Record audio and analyze in real-time with optimized handling"""
         try:
             # Initialize audio input stream with optimized parameters
-            chunk_size = 16384  # Increased buffer size for better context
+            chunk_size = 16384  # Increased buffer size
             buffer = []  # Audio buffer
             buffer_duration = 0  # Track buffer duration
-            last_transcription = ""  # Track last transcription to avoid duplicates
+            last_transcription = ""  # Track last transcription
+            
+            # Use a queue for audio processing
+            import queue  # Added import here
+            audio_queue = queue.Queue(maxsize=100)
+            
+            def audio_callback(indata, frames, time, status):
+                """Callback for audio input"""
+                try:
+                    if status:
+                        print(f"Status: {status}")
+                    audio_queue.put(indata.copy())
+                except queue.Full:
+                    print("Queue is full, dropping audio chunk")
             
             stream = sd.InputStream(
                 channels=1,
                 samplerate=self.transcriber.sample_rate,
                 blocksize=chunk_size,
-                dtype=np.float32,
-                latency='low'  # Reduce latency
+                dtype=np.float32
             )
             
             with stream:
@@ -469,8 +419,8 @@ class SentimentAnalysisGUI:
                     buffer.append(audio_data)
                     buffer_duration += len(audio_data) / self.transcriber.sample_rate
                     
-                    # Process when buffer reaches ~3 seconds (increased for better context)
-                    if buffer_duration >= 3.0:
+                    # Process when buffer reaches ~2 seconds
+                    if buffer_duration >= 2.0:
                         # Combine buffer
                         audio_segment = np.concatenate(buffer)
                         
@@ -484,15 +434,16 @@ class SentimentAnalysisGUI:
                         transcription, _ = self.transcriber.transcribe_realtime(audio_segment)
                         if transcription and transcription != last_transcription:
                             self.current_transcription += f"{transcription} "
-                            self.root.after(0, lambda: self.update_displays(self.current_transcription))
+                            # Update displays in GUI thread
+                            self.root.after(0, lambda t=self.current_transcription: self.update_displays(t))
                             last_transcription = transcription
                             
                             # Enable controls
                             self.root.after(0, lambda: self.play_button.config(state='normal'))
                             self.root.after(0, lambda: self.save_button.config(state='normal'))
                         
-                        # Reset buffer but keep a small overlap
-                        overlap_samples = int(0.5 * self.transcriber.sample_rate)  # 0.5 seconds overlap
+                        # Reset buffer with overlap
+                        overlap_samples = int(0.5 * self.transcriber.sample_rate)
                         if len(buffer) > 1:
                             buffer = [buffer[-1][-overlap_samples:]]
                             buffer_duration = len(buffer[0]) / self.transcriber.sample_rate
@@ -504,8 +455,8 @@ class SentimentAnalysisGUI:
                 
         except Exception as e:
             print(f"Error in record_and_analyze: {e}")
-            self.root.after(0, lambda: self.show_error(str(e)))
-        
+            self.root.after(0, lambda err=str(e): self.show_error(err))
+    
     def update_transcription(self, text):
         self.transcription_text.delete(1.0, tk.END)
         self.transcription_text.insert(tk.END, text)
@@ -651,33 +602,89 @@ class SentimentAnalysisGUI:
 
     def play_recording(self):
         """Play the current recording"""
+        print("Play button clicked")  # Debug output
+        
         if self.recorded_audio is not None:
             try:
+                print(f"Playing audio of length: {len(self.recorded_audio)}")  # Debug output
+                
+                # Update status
+                self.status_label.config(text="Playing recording...")
+                
+                # Disable play button while playing
+                self.play_button.config(state='disabled')
+                
+                # Play audio
                 sd.play(self.recorded_audio, self.transcriber.sample_rate)
                 sd.wait()  # Wait until audio is finished playing
+                
+                # Re-enable play button and update status
+                self.play_button.config(state='normal')
+                self.status_label.config(text="Ready")
+                print("Finished playing audio")  # Debug output
+                
             except Exception as e:
-                self.show_error(f"Error playing audio: {str(e)}")
+                error_msg = f"Error playing audio: {str(e)}"
+                print(error_msg)  # Debug output
+                self.show_error(error_msg)
+                self.play_button.config(state='normal')
+        else:
+            print("No audio recording available to play")  # Debug output
+            self.show_error("No recording available to play")
 
     def save_recording(self):
-        """Save the current recording with timestamp"""
+        """Save the current recording and its transcript"""
+        print("Save button clicked")  # Debug output
+        
         if self.recorded_audio is not None:
             try:
+                print(f"Saving audio of length: {len(self.recorded_audio)}")  # Debug output
+                
+                # Create timestamp
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"recording_{timestamp}.wav"
-                filepath = os.path.join(self.recordings_dir, filename)
                 
-                # Save audio
-                sf.write(filepath, self.recorded_audio, self.transcriber.sample_rate)
+                # Create recordings directory if it doesn't exist
+                if not os.path.exists(self.recordings_dir):
+                    os.makedirs(self.recordings_dir)
+                    print(f"Created recordings directory: {self.recordings_dir}")  # Debug output
                 
-                # Save transcription
-                transcript_path = os.path.join(self.recordings_dir, f"transcript_{timestamp}.txt")
-                with open(transcript_path, 'w') as f:
+                # Save audio file
+                audio_filename = f"recording_{timestamp}.wav"
+                audio_filepath = os.path.join(self.recordings_dir, audio_filename)
+                sf.write(audio_filepath, self.recorded_audio, self.transcriber.sample_rate)
+                print(f"Saved audio file: {audio_filepath}")  # Debug output
+                
+                # Save transcript and sentiment
+                text_filename = f"transcript_{timestamp}.txt"
+                text_filepath = os.path.join(self.recordings_dir, text_filename)
+                
+                with open(text_filepath, 'w') as f:
+                    f.write("Transcription:\n")
+                    f.write("-" * 40 + "\n")
                     f.write(self.current_transcription)
+                    f.write("\n\nSentiment Analysis:\n")
+                    f.write("-" * 40 + "\n")
+                    
+                    # Get current emotions from analyzer
+                    emotions = self.analyzer.analyze_text(self.current_transcription)
+                    for emotion in emotions:
+                        f.write(f"{emotion['label'].capitalize()}: {emotion['score']:.1%}\n")
                 
-                self.status_label.config(text=f"Recording saved: {filename}")
+                print(f"Saved transcript file: {text_filepath}")  # Debug output
+                
+                # Update status
+                self.status_label.config(
+                    text=f"Saved recording as {audio_filename} and {text_filename}"
+                )
+                print("Save completed successfully")  # Debug output
                 
             except Exception as e:
-                self.show_error(f"Error saving recording: {str(e)}")
+                error_msg = f"Error saving recording: {str(e)}"
+                print(error_msg)  # Debug output
+                self.show_error(error_msg)
+        else:
+            print("No audio recording available to save")  # Debug output
+            self.show_error("No recording available to save")
 
     def get_emotion_color(self, emotion):
         """Get the color for a given emotion"""
