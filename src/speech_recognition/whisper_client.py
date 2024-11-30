@@ -3,6 +3,8 @@ import sounddevice as sd
 from scipy.io.wavfile import write
 import tempfile
 from src.utils.config_manager import ConfigManager
+import numpy as np
+import librosa
 
 class WhisperTranscriber:
     def __init__(self):
@@ -34,11 +36,29 @@ class WhisperTranscriber:
             result = self.model.transcribe(temp_audio.name)
             return result["text"]
 
-    def transcribe_realtime(self, duration=None):
-        """Record and transcribe in one step"""
-        audio = self.record_audio(duration)
-        transcription = self.transcribe_audio(audio)
-        return transcription, audio
+    def transcribe_realtime(self, audio_data):
+        """Transcribe audio in real-time with better handling"""
+        try:
+            # Convert to float32 if not already
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32)
+            
+            # Normalize audio
+            audio_data = librosa.util.normalize(audio_data)
+            
+            # Transcribe with Whisper
+            result = self.model.transcribe(
+                audio_data,
+                language='en',
+                task='transcribe',
+                fp16=False  # Use FP32 for CPU
+            )
+            
+            return result["text"].strip(), audio_data
+            
+        except Exception as e:
+            print(f"Error in real-time transcription: {e}")
+            return "", None
 
     def transcribe_file(self, filepath):
         """Transcribe audio from file"""

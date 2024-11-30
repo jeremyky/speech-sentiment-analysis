@@ -71,46 +71,92 @@ class EmotionDisplay(ttk.Frame):
             bar['value'] = emotion['score'] * 100
 
 class AudioMeter(tk.Canvas):
-    def __init__(self, parent, width=30, height=200):
-        super().__init__(parent, width=width, height=height, bg='black')
+    def __init__(self, parent, width=40, height=200):  # Increased width
+        super().__init__(parent, width=width, height=height, bg='white')
         self.configure(highlightthickness=1, highlightbackground='gray')
         self.width = width
         self.height = height
         self.level = 0
+        self.smoothing = 0.3  # Add smoothing factor
+        self.draw_meter()
         
     def update_levels(self, audio_data):
         if audio_data is None or len(audio_data) == 0:
-            self.level = 0
+            target_level = 0
         else:
-            # Calculate RMS value
+            # Calculate RMS value with adjusted sensitivity
             rms = np.sqrt(np.mean(np.square(audio_data)))
-            # Scale to 0-1 range with some headroom
-            self.level = min(1.0, rms * 4)
+            # Scale to 0-1 range with better calibration
+            target_level = min(1.0, rms * 50)  # Reduced from 100 to 50
+        
+        # Apply smoothing
+        self.level = (self.level * (1 - self.smoothing) + 
+                     target_level * self.smoothing)
+        
         self.draw_meter()
         
     def draw_meter(self):
         self.delete("all")
         
         # Draw background
-        self.create_rectangle(0, 0, self.width, self.height, fill='black')
+        self.create_rectangle(0, 0, self.width, self.height, fill='white')
         
-        # Draw level bar
+        # Draw level markers with labels
+        for i in range(10):
+            y = self.height * (i / 10)
+            self.create_line(0, y, 5, y, fill='gray')
+            if i % 2 == 0:  # Only show every other label
+                self.create_text(
+                    self.width - 12, 
+                    y, 
+                    text=f"{100 - (i * 10)}", 
+                    font=('Arial', 7),
+                    fill='gray'
+                )
+        
+        # Draw level bar with smoother gradient
         bar_height = int(self.level * self.height)
-        if self.level < 0.3:
-            color = '#2ecc71'  # Green
-        elif self.level < 0.7:
-            color = '#f1c40f'  # Yellow
-        else:
-            color = '#e74c3c'  # Red
+        if bar_height > 0:
+            # More segments for smoother gradient
+            segments = 40  # Increased from 30
+            segment_height = bar_height / segments
             
-        self.create_rectangle(
-            2,                    # Left padding
-            self.height - bar_height,  # Top
-            self.width - 2,       # Right padding
-            self.height,          # Bottom
-            fill=color,
-            outline=''
-        )
+            for i in range(segments):
+                y_top = self.height - (i + 1) * segment_height
+                y_bottom = self.height - i * segment_height
+                
+                # Calculate color based on position with smoother transitions
+                position = i / segments
+                if position < 0.6:  # Expanded green range
+                    color = self.interpolate_color('#2ecc71', '#f1c40f', position/0.6)
+                elif position < 0.8:  # Shorter yellow range
+                    color = self.interpolate_color('#f1c40f', '#e74c3c', (position-0.6)/0.2)
+                else:  # Red range
+                    color = '#e74c3c'
+                
+                self.create_rectangle(
+                    4,              # Increased left padding
+                    y_top,
+                    self.width - 16,  # Space for labels
+                    y_bottom,
+                    fill=color,
+                    outline='',
+                    width=0  # Remove borders between segments
+                )
+    
+    def interpolate_color(self, color1, color2, factor):
+        """Interpolate between two colors"""
+        # Convert hex to RGB
+        r1, g1, b1 = int(color1[1:3], 16), int(color1[3:5], 16), int(color1[5:7], 16)
+        r2, g2, b2 = int(color2[1:3], 16), int(color2[3:5], 16), int(color2[5:7], 16)
+        
+        # Interpolate
+        r = int(r1 + (r2 - r1) * factor)
+        g = int(g1 + (g2 - g1) * factor)
+        b = int(b1 + (b2 - b1) * factor)
+        
+        # Convert back to hex
+        return f'#{r:02x}{g:02x}{b:02x}'
 
 class SentimentAnalysisGUI:
     def __init__(self, root):
@@ -394,38 +440,63 @@ class SentimentAnalysisGUI:
             print(f"Error updating audio meter: {e}")
     
     def record_and_analyze(self):
-        """Record audio and analyze in real-time"""
-        while self.is_recording:
-            try:
-                # Record and transcribe
-                transcription, audio_data = self.transcriber.transcribe_realtime()
-                
-                if transcription and not transcription.isspace():
-                    self.current_transcription += f"{transcription}\n"
+        """Record audio and analyze in real-time with better buffering"""
+        try:
+            # Initialize audio input stream with larger buffer
+            chunk_size = 4096  # Increased buffer size
+            buffer = []  # Audio buffer
+            buffer_duration = 0  # Track buffer duration
+            
+            stream = sd.InputStream(
+                channels=1,
+                samplerate=self.transcriber.sample_rate,
+                blocksize=chunk_size,
+                dtype=np.float32
+            )
+            
+            with stream:
+                while self.is_recording:
+                    # Get audio data
+                    audio_data, overflowed = stream.read(chunk_size)
+                    audio_data = audio_data.flatten()
                     
-                    # Update displays in GUI thread
-                    self.root.after(0, lambda: self.update_displays(self.current_transcription))
+                    # Update audio meter
+                    self.root.after(0, lambda d=audio_data: self.audio_meter.update_levels(d))
                     
-                    # Store the recorded audio
-                    if self.recorded_audio is None:
-                        self.recorded_audio = audio_data
-                    else:
-                        self.recorded_audio = np.concatenate((self.recorded_audio, audio_data))
+                    # Add to buffer
+                    buffer.append(audio_data)
+                    buffer_duration += len(audio_data) / self.transcriber.sample_rate
                     
-                    # Enable playback controls
-                    self.root.after(0, lambda: self.play_button.config(state='normal'))
-                    self.root.after(0, lambda: self.save_button.config(state='normal'))
+                    # Process when buffer reaches ~2 seconds
+                    if buffer_duration >= 2.0:
+                        # Combine buffer
+                        audio_segment = np.concatenate(buffer)
+                        
+                        # Store for playback/saving
+                        if self.recorded_audio is None:
+                            self.recorded_audio = audio_segment
+                        else:
+                            self.recorded_audio = np.concatenate((self.recorded_audio, audio_segment))
+                        
+                        # Transcribe
+                        transcription, _ = self.transcriber.transcribe_realtime(audio_segment)
+                        if transcription:
+                            self.current_transcription += f"{transcription}\n"
+                            self.root.after(0, lambda: self.update_displays(self.current_transcription))
+                            
+                            # Enable controls
+                            self.root.after(0, lambda: self.play_button.config(state='normal'))
+                            self.root.after(0, lambda: self.save_button.config(state='normal'))
+                        
+                        # Reset buffer
+                        buffer = []
+                        buffer_duration = 0
                     
-                # Update audio meter
-                if audio_data is not None:
-                    self.root.after(0, lambda: self.audio_meter.update_levels(audio_data))
+                    time.sleep(0.01)  # Small delay
                     
-                time.sleep(0.1)  # Small delay to prevent CPU overload
-                    
-            except Exception as e:
-                print(f"Error in record_and_analyze: {e}")
-                self.root.after(0, lambda: self.show_error(str(e)))
-                break
+        except Exception as e:
+            print(f"Error in record_and_analyze: {e}")
+            self.root.after(0, lambda: self.show_error(str(e)))
     
     def update_transcription(self, text):
         self.transcription_text.delete(1.0, tk.END)
@@ -616,14 +687,6 @@ class SentimentAnalysisGUI:
 
     def setup_audio_meter(self):
         """Setup audio meter components"""
-        # Create audio meter frame
-        meter_frame = ttk.Frame(self.root)
-        meter_frame.pack(pady=5)
-        
-        # Create audio meter
-        self.audio_meter = AudioMeter(meter_frame)
-        self.audio_meter.pack(side='left', padx=5)
-        
         # Create emotion display
         self.emotion_display = EmotionDisplay(self.root)
         self.emotion_display.pack(pady=10, padx=20)
