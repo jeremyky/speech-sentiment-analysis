@@ -166,13 +166,14 @@ def evaluate_speech_recognition_robustness():
         
         transcriber = WhisperTranscriber()
         
-        # Test different conditions
+        # Enhanced conditions with audio preprocessing
         conditions = {
-            "normal": lambda x: x,  # No modification
-            "noise": lambda x: x + np.random.normal(0, 0.01, len(x)),  # Add noise
-            "speed_up": lambda x: librosa.effects.time_stretch(x, rate=1.2),  # Speed up
-            "slow_down": lambda x: librosa.effects.time_stretch(x, rate=0.8),  # Slow down
-            "low_quality": lambda x: librosa.resample(x, orig_sr=16000, target_sr=8000)  # Lower quality
+            "normal": lambda x, sr: x,  # No modification
+            "noise": lambda x, sr: x + np.random.normal(0, 0.01, len(x)),
+            "low_quality_raw": lambda x, sr: librosa.resample(x, orig_sr=sr, target_sr=8000),
+            "low_quality_enhanced": lambda x, sr: enhance_audio(librosa.resample(x, orig_sr=sr, target_sr=8000), sr),
+            "low_quality_denoise": lambda x, sr: denoise_audio(librosa.resample(x, orig_sr=sr, target_sr=8000)),
+            "low_quality_normalize": lambda x, sr: normalize_audio(librosa.resample(x, orig_sr=sr, target_sr=8000))
         }
         
         for condition, modifier in conditions.items():
@@ -186,7 +187,7 @@ def evaluate_speech_recognition_robustness():
             for audio_file in audio_files:
                 # Load and modify audio
                 audio, sr = sf.read(audio_file)
-                modified_audio = modifier(audio)
+                modified_audio = modifier(audio, sr)
                 
                 # Get ground truth
                 filename = os.path.basename(audio_file)
@@ -200,6 +201,10 @@ def evaluate_speech_recognition_robustness():
                     wer = transcriber.calculate_wer(text, transcription)
                     total_wer += wer
                     successful_tests += 1
+                    print(f"File: {filename}")
+                    print(f"Ground Truth: {text}")
+                    print(f"Transcribed: {transcription}")
+                    print(f"WER: {wer:.2%}")
                     os.unlink(temp_audio.name)
             
             print(f"Average WER for {condition}: {total_wer/successful_tests:.2%}")
@@ -207,6 +212,48 @@ def evaluate_speech_recognition_robustness():
     except Exception as e:
         print(f"Error in robustness evaluation: {e}")
         traceback.print_exc()
+
+def enhance_audio(audio, sr):
+    """Enhance low quality audio"""
+    # Apply a high-shelf filter to boost high frequencies
+    y_filter = librosa.effects.preemphasis(audio)
+    
+    # Apply dynamic range compression using librosa's decompose
+    S = librosa.stft(y_filter)
+    S_harmonic, S_percussive = librosa.decompose.hpss(S)
+    y_compressed = librosa.istft(S_harmonic)
+    
+    # Normalize
+    y_compressed = librosa.util.normalize(y_compressed)
+    
+    return y_compressed
+
+def denoise_audio(audio):
+    """Remove noise from audio using spectral gating"""
+    # Convert to spectrogram
+    D = librosa.stft(audio)
+    
+    # Estimate noise profile
+    noise_profile = np.mean(np.abs(D[:, :10]), axis=1, keepdims=True)
+    
+    # Apply spectral subtraction
+    D_cleaned = D * (np.abs(D) > 2*noise_profile)
+    
+    # Convert back to time domain
+    y_denoised = librosa.istft(D_cleaned)
+    
+    return y_denoised
+
+def normalize_audio(audio):
+    """Normalize audio volume"""
+    # Peak normalization
+    y_peak = librosa.util.normalize(audio, norm=np.inf)
+    
+    # RMS normalization
+    y_rms = librosa.util.normalize(audio, norm=2)
+    
+    # Return the average of both normalizations
+    return (y_peak + y_rms) / 2
 
 def evaluate_sentiment_analysis_edge_cases():
     """Evaluate sentiment analysis on edge cases"""
