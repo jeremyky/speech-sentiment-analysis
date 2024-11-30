@@ -200,6 +200,19 @@ class SentimentAnalysisGUI:
         )
         self.record_button.pack(side='left', padx=5)
         
+        # Create new recording and continue recording buttons (initially hidden)
+        self.new_recording_button = ttk.Button(
+            controls_frame,
+            text="New Recording",
+            command=self.start_new_recording
+        )
+        
+        self.continue_recording_button = ttk.Button(
+            controls_frame,
+            text="Continue Recording",
+            command=self.continue_recording
+        )
+        
         # Create upload buttons
         ttk.Button(
             controls_frame,
@@ -725,26 +738,6 @@ class SentimentAnalysisGUI:
             value="segment"
         ).pack(side='left', padx=5)
         
-        # Create playback controls
-        control_frame = ttk.Frame(self.root)
-        control_frame.pack(pady=5)
-        
-        self.play_button = ttk.Button(
-            control_frame,
-            text="Play",
-            command=self.play_recording,
-            state='disabled'
-        )
-        self.play_button.pack(side='left', padx=5)
-        
-        self.save_button = ttk.Button(
-            control_frame,
-            text="Save",
-            command=self.save_recording,
-            state='disabled'
-        )
-        self.save_button.pack(side='left', padx=5)
-
     def update_displays(self, text):
         """Update both transcription and emotion displays"""
         # Update transcription
