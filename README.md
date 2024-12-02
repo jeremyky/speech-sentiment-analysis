@@ -50,6 +50,7 @@ pip install -r requirements.txt
 
 4. Set up Hugging Face access:
 pip install --upgrade huggingface_hub
+
 huggingface-cli login
 # Enter your access token from https://huggingface.co/settings/tokens
 
