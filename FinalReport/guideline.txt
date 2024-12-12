@@ -1,0 +1,26 @@
+CS 4501 NLP Final Project Report Guideline
+
+Logistics
+Deadline: 12/13 11:59pm (No late days allowed!)
+The report should use the ICLR LaTeX template: https://github.com/ICLR/Master-Template/raw/master/iclr2025.zip 
+Include the names and computing IDs (emails) of all team members (Note: You need to uncomment line 49 in iclr2025_conference.tex for your names to show up)
+Only one member needs to submit the report (in PDF format) on Canvas; every member will receive the same score 
+The report should include and build upon the contents in your initial project proposal & midterm report (i.e. no need to remove the applicable contents), though you can revise them as appropriate in the final report
+The expected length of the report is around 7 pages (everything included), though it won’t hurt if you’d like to write more
+
+Contents (Some contents are from the project proposal & midterm report)
+Title: An appropriate title of the project
+Abstract: A brief description of the project, including 
+The topic and background of the project (e.g., an NLP technique you aim to analyze; an NLP task/application you aim to study; etc.) 
+The goal of the project (e.g., to understand/analyze the effectiveness and/or limitations of an NLP technique; to develop a new method or to build a model for a specific NLP application with good performance; to evaluate the performance of existing NLP models; etc.)
+Introduction: 
+The importance of the topic (e.g., why is the problem/topic studied interesting, and what can you expect to learn from this project)
+An overview of the project (e.g., the motivation, challenges, proposed solution, and results)
+Related work: Detailed discussions of related methods/studies and whether they can be directly applied to the problem studied. If yes, what findings emerged when you applied them? If not, what are the key differences between your approach and prior research? You may have multiple subsections if there are various lines of related work. 
+Problem setup: An overview of the problem setting, including the inputs, outputs, motivation, and goals of the framework.
+Method: An overview of the framework, including the model design, training/inference algorithms, and any pre-/post-processing steps. Highlight the major components of the proposed method or application (e.g., what model architecture/training objectives/APIs to use). You may include a diagram/pseudocode to illustrate the framework.
+Experiment setup & evaluation: Describe the datasets you plan to use/have used and the evaluation protocol to test the performance of the proposed method (if your project proposes new methods) or existing models (if your project evaluates off-the-shelf models). If a new dataset needs to be created, describe the procedure of the dataset construction process. Include baselines and ablations as appropriate.
+Results: Any empirical results you have obtained, including both positive and negative results, and any insights gained from them. You should present both quantitative and qualitative analyses (e.g., report evaluation metrics on benchmarks/datasets of your application; analyze the properties of the methods/models with plots, case studies, and hyperparameter studies).
+Challenges and solutions: Describe any difficulties you have encountered in your project, and explain how you overcame these challenges.
+Conclusion: Summarize the key findings in this project and ​​discuss potential future directions.
+(Optional) Appendix: Additional information, such as detailed tables, figures, or algorithms that complement the main content of the paper.
